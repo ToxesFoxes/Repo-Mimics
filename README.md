@@ -20,6 +20,10 @@ Mimics brings a Skinwalker-style mechanic into R.E.P.O by allowing monsters to m
 
 Both Host and Clients need to install this mod to work.
 
+## 🧩 Compatibility
+
+This mod is incompatible with mods like [Disable Noise Reduction](https://thunderstore.io/c/repo/p/SVRZ/Disable_Noise_Reduction/) by [SVRZ](https://thunderstore.io/c/repo/p/SVRZ/), as it relies on the game's built-in noise reduction to capture audio and send chunks to other players correctly.
+
 ## ✨ Features
 
 - Monsters can mimic player voices during gameplay

@@ -1,7 +1,7 @@
 {
     "name": "Mimics",
     "version_number": "1.0.0",
-    "website_url": "https://github.com/ToxesFoxes/Mimics",
+    "website_url": "https://github.com/ToxesFoxes/Repo-Mimics",
     "description": "Think that was your teammate calling for help? Think again. Mimics brings the chilling Skinwalker mechanic from Lethal Company into R.E.P.O. Now, the monsters can mimic your crew's voices using random phrases recorded during gameplay. Trust no one.",
     "dependencies": [
         "BepInEx-BepInExPack-5.4.2305"

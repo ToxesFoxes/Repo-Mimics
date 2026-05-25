@@ -18,7 +18,7 @@ Mimics brings a Skinwalker-style mechanic into R.E.P.O by allowing monsters to m
 
 ## 🎯 Who Needs This Mod
 
-Only clients need to install this mod.
+Both Host and Clients need to install this mod to work.
 
 ## ✨ Features
 
@@ -141,6 +141,7 @@ Contributions are welcome! Please:
 - **BepInEx** - [BepInEx Mod Loader](https://github.com/bepinex/bepinex)
 - **r2modman** - [r2modmanPlus Mod Manager](https://github.com/ebkr/r2modmanPlus)
 - **Thunderstore** - [Thunderstore Mod Hosting](https://thunderstore.io/)
+- **Mimic** - [Original mod](https://thunderstore.io/c/repo/p/eth9n/Mimic/) for R.E.P.O v0.3.0 and lower by [eth9n](https://thunderstore.io/c/repo/p/eth9n/)
 - **R.E.P.O** - Game by semiwork
 - **ToxesFoxes** - Mod development
 - **Contributors** - See GitHub contributors page for details

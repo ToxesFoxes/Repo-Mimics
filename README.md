@@ -26,6 +26,18 @@ Both Host and Clients need to install this mod to work.
 - Random phrase playback from recorded in-game voice lines
 - Works with standard BepInEx mod workflow for R.E.P.O
 
+## 🔍 Differences From Original Mimic
+
+This mod is a full rework focused on compatibility with newer R.E.P.O versions and long-term stability.
+
+- Reworked enemy discovery for newer game versions instead of relying on a fixed scene path.
+- New audio transmission pipeline with per-transmission tracking and improved chunk handling.
+- Backward-compatible network receive path for older packet format support.
+- Improved recording flow with pre-speech capture and smarter silence handling.
+- Persistent audio cache with per-player storage and players index.
+- Safer runtime behavior with additional validation, stale transmission cleanup, and better diagnostics.
+- Expanded configuration options for playback radius, persistence, filters, and debug logging.
+
 ## ⚙️ Mod Settings
 
 Settings are stored in the BepInEx config file:
@@ -149,6 +161,23 @@ Contributions are welcome! Please:
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](https://github.com/ToxesFoxes/Repo-Mimics/blob/main/LICENSE) file for details.
+
+## 🧭 Roadmap
+
+Planned feature: context-aware audio system.
+
+Mimic playback will be linked to gameplay context, for example:
+
+- Enemy sees player
+- Enemy hits player
+- Enemy death
+- Enemy destroyed
+- Item destroyed
+- Player death
+- Player damaged
+- Player carrying item
+
+Goal: make mimic behavior feel more believable and tied to events, instead of only random playback timing.
 
 ## 📞 Support
 

@@ -1,7 +1,7 @@
 # Mimics build instructions
 
 ## 1) Set game path
-Open Mimics.local.props and set both GameDir and BepInExDir.
+Open TFS_Mimics.local.props and set both GameDir and BepInExDir.
 
 Expected folders:
 - GameDir\\REPO_Data\\Managed

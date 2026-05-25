@@ -72,8 +72,8 @@
   </ItemGroup>
 
   <Target Name="ValidateRepoGameDir" BeforeTargets="ResolveReferences">
-    <Error Condition="'$(GameDir)' == ''" Text="GameDir is not set. Configure it in Mimics.local.props." />
-    <Error Condition="'$(BepInExDir)' == ''" Text="BepInExDir is not set. Configure it in Mimics.local.props." />
+    <Error Condition="'$(GameDir)' == ''" Text="GameDir is not set. Configure it in TFS_Mimics.local.props." />
+    <Error Condition="'$(BepInExDir)' == ''" Text="BepInExDir is not set. Configure it in TFS_Mimics.local.props." />
     <Error Condition="!Exists('$(GameDir)\\REPO_Data\\Managed')" Text="Managed folder not found: $(GameDir)\\REPO_Data\\Managed" />
     <Error Condition="!Exists('$(BepInExDir)\\core')" Text="BepInEx core folder not found: $(BepInExDir)\\core" />
   </Target>

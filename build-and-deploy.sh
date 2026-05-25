@@ -10,12 +10,12 @@ DEPLOY_DIR="${DEPLOY_DIR:-$DEFAULT_DEPLOY_DIR}"
 cd "$ROOT_DIR"
 
 echo "[1/3] Building project ($CONFIGURATION)..."
-dotnet build Mimics.csproj -c "$CONFIGURATION"
+dotnet build TFS_Mimics.csproj -c "$CONFIGURATION"
 
 OUT_DIR="$ROOT_DIR/bin/$CONFIGURATION"
 DLL_PATH="$OUT_DIR/TFS_Mimics.dll"
 if [[ ! -f "$DLL_PATH" ]]; then
-  DLL_PATH="$OUT_DIR/Mimics.dll"
+  DLL_PATH="$OUT_DIR/TFS_Mimics.dll"
 fi
 
 if [[ ! -f "$DLL_PATH" ]]; then

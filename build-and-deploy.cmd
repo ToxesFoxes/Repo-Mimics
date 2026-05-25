@@ -5,14 +5,14 @@ set "ROOT_DIR=%~dp0"
 set "CONFIGURATION=%~1"
 if "%CONFIGURATION%"=="" set "CONFIGURATION=Release"
 
-set "DEFAULT_DEPLOY_DIR=C:\Users\ToxesFoxes\AppData\Roaming\r2modmanPlus-local\REPO\profiles\REPO v4\BepInEx\plugins\ToxesFoxes-Mimics"
+set "DEFAULT_DEPLOY_DIR=C:\Users\ToxesFoxes\AppData\Roaming\r2modmanPlus-local\REPO\profiles\REPO v4\BepInEx\plugins\ToxesFoxes-TFS_Mimics"
 if "%DEPLOY_DIR%"=="" (
   set "DEPLOY_DIR=%DEFAULT_DEPLOY_DIR%"
 )
 
 echo [1/3] Building project (%CONFIGURATION%)...
 pushd "%ROOT_DIR%"
-dotnet build Mimics.csproj -c %CONFIGURATION%
+dotnet build TFS_Mimics.csproj -c %CONFIGURATION%
 if errorlevel 1 (
   popd
   exit /b 1
@@ -21,7 +21,7 @@ if errorlevel 1 (
 set "OUT_DIR=%ROOT_DIR%bin\%CONFIGURATION%"
 set "DLL_PATH=%OUT_DIR%\TFS_Mimics.dll"
 if not exist "%DLL_PATH%" (
-  set "DLL_PATH=%OUT_DIR%\Mimics.dll"
+  set "DLL_PATH=%OUT_DIR%\TFS_Mimics.dll"
 )
 
 if not exist "%DLL_PATH%" (

@@ -399,9 +399,9 @@ FodyWeavers.xsd
 
 
 # Release
-thunderstore/*.dll
-thunderstore/*.md
-Release-thunderstore.zip
+r2modman/*.dll
+r2modman/*.md
+Release-r2modman.zip
 
 # Local MSBuild-config files
 Directory.Build.props.local

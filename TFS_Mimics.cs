@@ -1976,7 +1976,7 @@ namespace TFS_Mimics
             configPlaybackNearRadius = Config.Bind("General", "Playback Near Radius", 15, new ConfigDescription("Preferred radius around local player for selecting a mimic playback enemy.", new AcceptableValueRange<int>(5, 100), Array.Empty<object>()));
             configMinDelay = Config.Bind("General", "MinDelay", 15, new ConfigDescription("Minimum delay before record/play.", new AcceptableValueRange<int>(5, 300), Array.Empty<object>()));
             configMaxDelay = Config.Bind("General", "MaxDelay", 60, new ConfigDescription("Maximum delay before record/play.", new AcceptableValueRange<int>(10, 600), Array.Empty<object>()));
-            configHearYourself = Config.Bind("General", "Hear Yourself?", true, "If false, only other clients hear mimic playback.");
+            configHearYourself = Config.Bind("General", "Hear Yourself?", false, "If false, only other clients hear mimic playback.");
             configPlaybackVoiceFilterEnabled = Config.Bind("General", "Playback Voice Filters Enabled", true, "If false, playback never applies pitch/alien voice filters.");
             configPersistAudioCache = Config.Bind("General", "Persist Audio Cache", true, "If true, received mimic audio clips are saved to disk and loaded on world entry.");
             configPersistMaxFilesPerPlayer = Config.Bind("General", "Persist Max Files Per Player", 100, new ConfigDescription("Maximum number of persisted recordings to keep per player folder.", new AcceptableValueRange<int>(1, 5000), Array.Empty<object>()));

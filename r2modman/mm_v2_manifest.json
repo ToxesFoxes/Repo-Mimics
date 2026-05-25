@@ -12,7 +12,9 @@
     "installedAtTime": 0,
     "loaders": [],
     "dependencies": [
-        "BepInEx-BepInExPack-5.4.2305"
+        "BepInEx-BepInExPack-5.4.2305",
+        "nickklmao-REPOConfig-1.2.6",
+        "nickklmao-MenuLib-2.5.2"
     ],
     "incompatibilities": [
         "SVRZ-Disable_Noise_Reduction-1.2.1"

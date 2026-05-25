@@ -26,6 +26,49 @@ Only clients need to install this mod.
 - Random phrase playback from recorded in-game voice lines
 - Works with standard BepInEx mod workflow for R.E.P.O
 
+## ⚙️ Mod Settings
+
+Settings are stored in the BepInEx config file:
+
+```text
+<REPO_PROFILE>/BepInEx/config/TFS_Mimics.cfg
+```
+
+Main options:
+
+- `General > Volume` (default: `10`, range: `0-20`) - mimic playback volume in percent.
+- `General > Playback Near Radius` (default: `15`, range: `5-100`) - preferred radius around local player for playback target selection.
+- `General > MinDelay` (default: `15`, range: `5-300`) - minimum delay before random record/play cycle.
+- `General > MaxDelay` (default: `60`, range: `10-600`) - maximum delay before random record/play cycle.
+- `General > Hear Yourself?` (default: `false`) - if `false`, only other players hear mimic playback.
+- `General > Playback Voice Filters Enabled` (default: `true`) - enables random pitch/alien filters on playback.
+- `General > Persist Audio Cache` (default: `true`) - enables saving received mimic clips to disk.
+- `General > Persist Max Files Per Player` (default: `100`, range: `1-5000`) - max saved recordings per player folder.
+- `Experimental > Sampling Rate` (default: `48000`, range: `16000-48000`) - microphone and processing sample rate.
+- `Filter > Filter Enabled?` (default: `false`) - enables per-enemy mimic filter.
+- `Debug > Verbose Logging` (default: `false`) - enables detailed debug logs.
+
+If persistence is enabled, files are saved inside the mod folder:
+
+```text
+<REPO_PROFILE>/BepInEx/plugins/ToxesFoxes-Mimics/audio-cache
+```
+
+Inside `audio-cache`, the mod also creates a players index file:
+
+```text
+<REPO_PROFILE>/BepInEx/plugins/ToxesFoxes-Mimics/audio-cache/players.json
+```
+
+Each player gets a separate folder by player ID, and their recordings are stored there:
+
+```text
+<REPO_PROFILE>/BepInEx/plugins/ToxesFoxes-Mimics/audio-cache/
+	players.json
+	<player_id_1>/audio_<player_id_1>_<guid>.bin
+	<player_id_2>/audio_<player_id_2>_<guid>.bin
+```
+
 ## 📝 Requirements
 
 - R.E.P.O (Steam)

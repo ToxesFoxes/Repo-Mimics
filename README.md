@@ -138,6 +138,14 @@ For one-command build and deploy, see README.build.md.
 - Use at your own risk
 - Always back up your saves before using any mods
 
+## 🤖 AI Content Disclaimer
+
+This project used AI-assisted tooling during development for debugging, bug fixing, and technical iteration support.
+
+- AI assistance was used as a development aid, not as an autonomous publisher.
+- Final implementation decisions, integration, and testing were performed manually by the author.
+- This notice is provided for transparency regarding the development workflow.
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please:

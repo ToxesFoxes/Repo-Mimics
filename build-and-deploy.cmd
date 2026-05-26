@@ -5,7 +5,7 @@ set "ROOT_DIR=%~dp0"
 set "CONFIGURATION=%~1"
 if "%CONFIGURATION%"=="" set "CONFIGURATION=Release"
 
-set "DEFAULT_DEPLOY_DIR=C:\Users\ToxesFoxes\AppData\Roaming\r2modmanPlus-local\REPO\profiles\REPO v4\BepInEx\plugins\ToxesFoxes-TFS_Mimics"
+set "DEFAULT_DEPLOY_DIR=C:\Users\ToxesFoxes\AppData\Roaming\r2modmanPlus-local\REPO\profiles\Dev\BepInEx\plugins\ToxesFoxes-TFS_Mimics"
 if "%DEPLOY_DIR%"=="" (
   set "DEPLOY_DIR=%DEFAULT_DEPLOY_DIR%"
 )

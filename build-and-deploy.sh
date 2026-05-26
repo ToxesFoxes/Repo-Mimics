@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIGURATION="${1:-Release}"
 
-DEFAULT_DEPLOY_DIR="/c/Users/ToxesFoxes/AppData/Roaming/r2modmanPlus-local/REPO/profiles/REPO v4/BepInEx/plugins/ToxesFoxes-Mimics"
+DEFAULT_DEPLOY_DIR="/c/Users/ToxesFoxes/AppData/Roaming/r2modmanPlus-local/REPO/profiles/Dev/BepInEx/plugins/ToxesFoxes-Mimics"
 DEPLOY_DIR="${DEPLOY_DIR:-$DEFAULT_DEPLOY_DIR}"
 
 cd "$ROOT_DIR"

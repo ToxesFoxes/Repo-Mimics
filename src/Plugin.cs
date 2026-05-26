@@ -7,7 +7,7 @@ using HarmonyLib;
 
 namespace TFS_Mimics
 {
-    [BepInPlugin("TFS_Mimics", "TFS_Mimics", "1.1.6")]
+    [BepInPlugin("TFS_Mimics", "TFS_Mimics", "1.0.2")]
     public class Plugin : BaseUnityPlugin
     {
         internal static ManualLogSource PluginLogger;

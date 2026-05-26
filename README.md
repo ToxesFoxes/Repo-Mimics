@@ -6,7 +6,7 @@ They can replay random phrases recorded during gameplay, making it harder to tru
 [![Thunderstore](https://img.shields.io/badge/Thunderstore-Rejected-red)](https://thunderstore.io/c/repo/p/ToxesFoxes/Mimics/)
 [![GitHub Release](https://img.shields.io/github/v/release/ToxesFoxes/Repo-Mimics?label=GitHub%20Release&color=orange)](https://github.com/ToxesFoxes/Repo-Mimics/releases)
 
-![Version](https://img.shields.io/badge/version-1.0.1-blue)
+![Version](https://img.shields.io/badge/version-1.0.2-blue)
 ![Game](https://img.shields.io/badge/game-R.E.P.O-green)
 ![Loader](https://img.shields.io/badge/loader-BepInEx-6aa84f)
 ![Status](https://img.shields.io/badge/status-working-brightgreen)

@@ -163,6 +163,22 @@ namespace TFS_Mimics
             }
         }
 
+        private void AbortCapture()
+        {
+            if (!capturingSpeech)
+            {
+                return;
+            }
+
+            DLog($"AbortCapture: discarding bufferedSamples={bufferPosition} {DebugContext()}");
+            capturingSpeech = false;
+            bufferPosition = 0;
+            fileSaved = false;
+            vadHoldUntil = 0f;
+            pendingSilenceSamples = 0;
+            postSpeechSamplesRemaining = 0;
+        }
+
         public void ProcessVoiceData(short[] voiceData)
         {
             if (!isRecording || !photonView.IsMine)
@@ -170,9 +186,11 @@ namespace TFS_Mimics
                 return;
             }
 
-            // Don't record when the player has muted their microphone.
+            // If the player mutes mid-capture — discard the in-progress buffer and
+            // reset state so recording starts clean when they unmute.
             if (IsMicrophoneMuted())
             {
+                AbortCapture();
                 return;
             }
 

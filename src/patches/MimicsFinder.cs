@@ -1,32 +1,26 @@
-using Photon.Pun;
-using UnityEngine;
-
 namespace TFS_Mimics.patches
 {
-    public class MimicsFinder : MonoBehaviour
+    // Static voice-data event bus — replaces the original's MimicsFinder MonoBehaviour singleton.
+    // No scene GameObject is needed; the patch simply routes microphone frames here.
+    internal static class VoiceDataBus
     {
-        private static MimicsFinder instance;
+        private static TFS_Mimics _localMimics;
 
-        public static TFS_Mimics LocalMimics { get; set; }
-
-        public static void EnsureInitialized()
+        internal static TFS_Mimics LocalMimics
         {
-            if (instance != null)
+            get => _localMimics;
+            set => _localMimics = value;
+        }
+
+        internal static void Dispatch(short[] voiceData)
+        {
+            var local = _localMimics;
+            if (local == null || local.photonView == null || !local.photonView.IsMine)
             {
                 return;
             }
 
-            instance = new GameObject("MimicsFinder").AddComponent<MimicsFinder>();
-            DontDestroyOnLoad(instance.gameObject);
-        }
-
-        private void OnDestroy()
-        {
-            if (instance == this)
-            {
-                LocalMimics = null;
-                instance = null;
-            }
+            local.ProcessVoiceData(voiceData);
         }
     }
 }

@@ -9,15 +9,7 @@ namespace TFS_Mimics.patches
         [HarmonyPrefix]
         private static void Prefix(short[] buf)
         {
-            MimicsFinder.EnsureInitialized();
-
-            var local = MimicsFinder.LocalMimics;
-            if (local == null || local.photonView == null || !local.photonView.IsMine)
-            {
-                return;
-            }
-
-            local.ProcessVoiceData(buf);
+            VoiceDataBus.Dispatch(buf);
         }
     }
 }

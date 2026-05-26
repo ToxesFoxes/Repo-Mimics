@@ -192,6 +192,39 @@ namespace TFS_Mimics
             return output;
         }
 
+        // Writes a WAV file to audio-cache/debug/ when verbose logging is active.
+        // Useful for verifying recording and playback audio quality outside the game.
+        private void TryWriteDebugWav(string prefix, byte[] pcmBytes, int wavSampleRate)
+        {
+            if (Plugin.configDebugVerbose == null || !Plugin.configDebugVerbose.Value)
+            {
+                return;
+            }
+
+            try
+            {
+                var dir = Path.Combine(GetAudioCacheDirectoryPath(), "debug");
+                Directory.CreateDirectory(dir);
+                var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff");
+                var fileName = $"{prefix}_{timestamp}.wav";
+                var path = Path.Combine(dir, fileName);
+                var sampleCount = pcmBytes.Length / 2;
+
+                using (var fs = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
+                using (var writer = new BinaryWriter(fs))
+                {
+                    WriteWavHeader(writer, sampleCount, wavSampleRate);
+                    writer.Write(pcmBytes);
+                }
+
+                DLog($"Debug WAV written: file={fileName} samples={sampleCount} sampleRate={wavSampleRate} {DebugContext()}");
+            }
+            catch (Exception ex)
+            {
+                Log.LogWarning($"Debug WAV write failed: {ex.Message}");
+            }
+        }
+
         // Butterworth 2nd-order low-pass filter (single forward pass, no phase distortion hack).
         // Coefficients derived from bilinear transform at the given cutoff.
         private float[] ApplyLowPassFilter(float[] samples, float cutoffFreq)
@@ -202,17 +235,18 @@ namespace TFS_Mimics
                 return output;
             }
 
-            // Bilinear-transform Butterworth 2nd order
-            var wc = MathF.PI * 2f * cutoffFreq;
-            var k = wc / Mathf.Tan(MathF.PI * cutoffFreq / sampleRate);
+            // Standard bilinear-transform Butterworth 2nd-order LPF.
+            // k = tan(π * fc / fs) is the pre-warped normalised cutoff (small positive value).
+            var fs = sampleRate > 0 ? sampleRate : 48000f;
+            var k = Mathf.Tan(MathF.PI * cutoffFreq / fs);
             var k2 = k * k;
             var sqrt2k = MathF.Sqrt(2f) * k;
             var norm = 1f / (k2 + sqrt2k + 1f);
 
-            var b0 = norm;
-            var b1 = 2f * norm;
-            var b2 = norm;
-            var a1 = 2f * (1f - k2) * norm;
+            var b0 = k2 * norm;
+            var b1 = 2f * k2 * norm;
+            var b2 = k2 * norm;
+            var a1 = 2f * (k2 - 1f) * norm;
             var a2 = (k2 - sqrt2k + 1f) * norm;
 
             var x1 = 0f; var x2 = 0f;

@@ -63,7 +63,6 @@ namespace TFS_Mimics
         public PhotonView photonView;
 
         private PlayerVoiceChat playerVoiceChat;
-        private FieldInfo voiceChatField;
 
         private int sampleRate;
         private float[] audioBuffer;
@@ -79,6 +78,7 @@ namespace TFS_Mimics
         private bool isRecording;
         private bool capturingSpeech;
         private bool fileSaved;
+        private float vadHoldUntil;
 
         private Dictionary<string, bool> filter;
 
@@ -276,13 +276,6 @@ namespace TFS_Mimics
                 return;
             }
 
-            voiceChatField = typeof(PlayerAvatar).GetField("voiceChat", BindingFlags.Instance | BindingFlags.NonPublic);
-            if (voiceChatField == null)
-            {
-                Log.LogError("Could not find 'voiceChat' field in PlayerAvatar.");
-                return;
-            }
-
             sampleRate = Plugin.configSamplingRate.Value;
             DLog($"Configured sampleRate={sampleRate} minDelay={Plugin.configMinDelay.Value} maxDelay={Plugin.configMaxDelay.Value} volume={Plugin.configVoiceVolume.Value} hearSelf={Plugin.configHearYourself.Value} filterEnabled={Plugin.configFilterEnabled.Value} {DebugContext()}");
 
@@ -296,28 +289,50 @@ namespace TFS_Mimics
                 DLog("Filter disabled, all enemies can mimic.");
             }
 
-            StartCoroutine(WaitForVoiceChat(avatar));
+            StartCoroutine(InitializeVoiceChat(avatar));
         }
 
-        private IEnumerator WaitForVoiceChat(PlayerAvatar avatar)
+        // Finds PlayerVoiceChat via component search first, then falls back to reflection.
+        // Avoids storing a FieldInfo member whose sole purpose mirrors the original mod's approach.
+        private IEnumerator InitializeVoiceChat(PlayerAvatar avatar)
         {
-            var waits = 0;
-            while (playerVoiceChat == null)
+            // Direct component search — works if PlayerVoiceChat is on this or a child object.
+            playerVoiceChat = GetComponentInChildren<PlayerVoiceChat>(true);
+            if (playerVoiceChat == null)
             {
-                playerVoiceChat = (PlayerVoiceChat)voiceChatField.GetValue(avatar);
-                if (playerVoiceChat == null)
-                {
-                    waits++;
-                    if (waits % 120 == 0)
-                    {
-                        DLog($"Waiting for PlayerVoiceChat... frames={waits} {DebugContext()}");
-                    }
-
-                    yield return null;
-                }
+                playerVoiceChat = GetComponentInParent<PlayerVoiceChat>();
             }
 
-            DLog($"PlayerVoiceChat initialized after waitFrames={waits} {DebugContext()}");
+            if (playerVoiceChat == null)
+            {
+                // Reflection fallback: the field may not yet be set, so poll each frame.
+                var field = typeof(PlayerAvatar).GetField("voiceChat", BindingFlags.Instance | BindingFlags.NonPublic);
+                var waits = 0;
+                while (playerVoiceChat == null)
+                {
+                    if (field != null)
+                    {
+                        playerVoiceChat = field.GetValue(avatar) as PlayerVoiceChat;
+                    }
+
+                    if (playerVoiceChat == null)
+                    {
+                        waits++;
+                        if (waits % 120 == 0)
+                        {
+                            DLog($"Waiting for PlayerVoiceChat via reflection... frames={waits} {DebugContext()}");
+                        }
+
+                        yield return null;
+                    }
+                }
+
+                DLog($"PlayerVoiceChat found via reflection after waitFrames={waits} {DebugContext()}");
+            }
+            else
+            {
+                DLog($"PlayerVoiceChat found via component search {DebugContext()}");
+            }
 
             if (photonView.IsMine && SemiFunc.RunIsLevel())
             {

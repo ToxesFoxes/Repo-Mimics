@@ -1,8 +1,6 @@
 using System;
 using System.Collections;
-using System.Reflection;
 using Photon.Pun;
-using Photon.Voice;
 using UnityEngine;
 
 namespace TFS_Mimics
@@ -105,17 +103,89 @@ namespace TFS_Mimics
             return copyCount;
         }
 
+        // Cached reflection handles for checking PlayerVoiceChat.recorder.TransmitEnabled.
+        private System.Reflection.FieldInfo _recorderField;
+        private System.Reflection.PropertyInfo _recorderTransmitProp;
+        private bool _recorderReflectionDone;
+
+        // Returns true when the player has muted their microphone.
+        // Uses lazy-initialised reflection into PlayerVoiceChat.recorder so the
+        // hot path (ProcessVoiceData) avoids type-scanning after the first call.
+        private bool IsMicrophoneMuted()
+        {
+            if (playerVoiceChat == null)
+            {
+                return false;
+            }
+
+            if (!_recorderReflectionDone)
+            {
+                _recorderReflectionDone = true;
+                _recorderField = typeof(PlayerVoiceChat).GetField(
+                    "recorder",
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.NonPublic |
+                    System.Reflection.BindingFlags.Public);
+
+                if (_recorderField != null)
+                {
+                    var recorderObj = _recorderField.GetValue(playerVoiceChat);
+                    if (recorderObj != null)
+                    {
+                        _recorderTransmitProp = recorderObj.GetType().GetProperty(
+                            "TransmitEnabled",
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.Public);
+                    }
+                }
+
+                DLog($"IsMicrophoneMuted init: recorderField={_recorderField != null} transmitProp={_recorderTransmitProp != null} {DebugContext()}");
+            }
+
+            if (_recorderField == null || _recorderTransmitProp == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                var recorder = _recorderField.GetValue(playerVoiceChat);
+                if (recorder == null)
+                {
+                    return false;
+                }
+
+                return !(bool)_recorderTransmitProp.GetValue(recorder);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public void ProcessVoiceData(short[] voiceData)
         {
-            if (!isRecording || !photonView.IsMine || playerVoiceChat == null)
+            if (!isRecording || !photonView.IsMine)
+            {
+                return;
+            }
+
+            // Don't record when the player has muted their microphone.
+            if (IsMicrophoneMuted())
             {
                 return;
             }
 
             PushToPreSpeechBuffer(voiceData);
 
-            var isTalkingField = typeof(PlayerVoiceChat).GetField("isTalking", BindingFlags.Instance | BindingFlags.NonPublic);
-            var isTalking = isTalkingField != null && (bool)isTalkingField.GetValue(playerVoiceChat);
+            // RMS energy-based voice activity detection — no reflection into PlayerVoiceChat internals.
+            var energy = ComputeRmsEnergy(voiceData);
+            if (energy > VadEnergyThreshold)
+            {
+                vadHoldUntil = Time.time + VadHoldSeconds;
+            }
+
+            var isTalking = Time.time < vadHoldUntil;
 
             if (isTalking && !capturingSpeech)
             {
@@ -199,12 +269,34 @@ namespace TFS_Mimics
             var localPlayerName = GetPlayerDisplayName(localPlayer);
             Log.LogInfo($"Finished recording player [{localPlayerName}]({localPlayerId}) duration={durationSec:F2}s bytes={audioBytes.Length} {DebugContext()}");
             DLog($"FinalizeCaptureAndSend: usedSamples={usedSamples} bytes={audioBytes.Length} {DebugContext()}");
+            // TryWriteDebugWav("rec", audioBytes, sampleRate);
             StartCoroutine(SendAudioInChunks(audioBytes));
             StartRecording();
         }
 
-        private IEnumerator SendAudioInChunks(byte[] audioData)
+        // Voice activity detection using per-frame RMS energy.
+        // This avoids reflecting into PlayerVoiceChat private state entirely.
+        private const float VadEnergyThreshold = 0.012f;
+        private const float VadHoldSeconds = 0.5f;
+
+        private static float ComputeRmsEnergy(short[] samples)
         {
+            if (samples == null || samples.Length == 0)
+            {
+                return 0f;
+            }
+
+            double sumSq = 0;
+            for (var i = 0; i < samples.Length; i++)
+            {
+                var normalized = samples[i] / 32768.0;
+                sumSq += normalized * normalized;
+            }
+
+            return (float)Math.Sqrt(sumSq / samples.Length);
+        }
+
+        private IEnumerator SendAudioInChunks(byte[] audioData)        {
             var chunks = ChunkAudioData(audioData, 8192);
             var transmissionId = Guid.NewGuid().ToString("N");
             var localPlayer = PhotonNetwork.LocalPlayer;

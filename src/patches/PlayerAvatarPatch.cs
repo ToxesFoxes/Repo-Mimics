@@ -23,7 +23,7 @@ namespace TFS_Mimics.patches
             var view = __instance.GetComponent<PhotonView>();
             if (view != null && view.IsMine)
             {
-                MimicsFinder.LocalMimics = mimics;
+                VoiceDataBus.LocalMimics = mimics;
             }
         }
     }

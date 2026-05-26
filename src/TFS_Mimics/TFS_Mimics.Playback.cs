@@ -4,17 +4,12 @@ using System.Collections.Generic;
 using System.Linq;
 using Photon.Pun;
 using UnityEngine;
+using UnityEngine.Audio;
 
 namespace TFS_Mimics
 {
     public partial class TFS_Mimics
     {
-        [PunRPC]
-        public void ReceiveAudioChunk(byte[] chunk, int chunkIndex, int totalChunks, bool applyFilter, int senderSampleRate, PhotonMessageInfo info)
-        {
-            ReceiveAudioChunkInternal(chunk, chunkIndex, totalChunks, applyFilter, senderSampleRate, "legacy", info);
-        }
-
         [PunRPC]
         public void ReceiveAudioChunkV2(byte[] chunk, int chunkIndex, int totalChunks, bool applyFilter, int senderSampleRate, string transmissionId, PhotonMessageInfo info)
         {
@@ -159,11 +154,18 @@ namespace TFS_Mimics
             var playbackFilterEnabled = Plugin.configPlaybackVoiceFilterEnabled == null || Plugin.configPlaybackVoiceFilterEnabled.Value;
             var applyVoiceFilter = playbackFilterEnabled && UnityEngine.Random.value > 0.9f;
             DLog($"PlayReceivedAudio start: bytes={audioData.Length} applyVoiceFilter={applyVoiceFilter} senderSampleRate={senderSampleRate} source={sourceActor}:{sourceName} {DebugContext()}");
+            // TryWriteDebugWav($"play_{SanitizePlayerIdForFileName(sourcePlayerId ?? $"actor_{sourceActor}")}", audioData, senderSampleRate);
             var samples = ConvertByteArrayToFloatArray(audioData, applyVoiceFilter, senderSampleRate);
             var clip = AudioClip.Create("ReceivedClip", samples.Length, 1, senderSampleRate, false);
             clip.SetData(samples, 0);
 
-            DLog($"AudioClip created: samples={samples.Length} lengthSec={clip.length:F2} channels=1 frequency={senderSampleRate} {DebugContext()}");
+            if (Plugin.configDebugVerbose != null && Plugin.configDebugVerbose.Value)
+            {
+                var sumSq = 0f;
+                for (var i = 0; i < samples.Length; i++) sumSq += samples[i] * samples[i];
+                var rms = Mathf.Sqrt(sumSq / Mathf.Max(1, samples.Length));
+                DLog($"AudioClip created: samples={samples.Length} lengthSec={clip.length:F2} channels=1 frequency={senderSampleRate} rms={rms:F5} {DebugContext()}");
+            }
 
             var enemies = GetEnemiesList().Where(e => e != null).ToList();
             DLog($"Eligible enemies for playback: count={enemies.Count} filterEnabled={Plugin.configFilterEnabled.Value} {DebugContext()}");
@@ -209,19 +211,24 @@ namespace TFS_Mimics
             }
 
             sourceComponent.clip = clip;
-            sourceComponent.volume = Mathf.Clamp01(Plugin.configVoiceVolume.Value / 100f);
+            // configVoiceVolume is int 0-20 → map to 0.0-1.0
+            sourceComponent.volume = Mathf.Clamp01(Plugin.configVoiceVolume.Value / 20f);
+            sourceComponent.mute = false;
+            sourceComponent.pitch = 1f;
+            sourceComponent.loop = false;
+            sourceComponent.bypassEffects = false;
+            sourceComponent.bypassListenerEffects = false;
             sourceComponent.spatialBlend = 1f;
             sourceComponent.dopplerLevel = 0.5f;
             sourceComponent.minDistance = 1f;
             sourceComponent.maxDistance = 20f;
             sourceComponent.rolloffMode = AudioRolloffMode.Linear;
 
-            if (playerVoiceChat != null)
-            {
-                sourceComponent.outputAudioMixerGroup = playerVoiceChat.mixerMicrophoneSound;
-            }
+            // Null mixer group = Unity's default Master output, always audible.
+            sourceComponent.outputAudioMixerGroup = null;
 
             sourceComponent.Play();
+            DLog($"AudioSource.Play() called: isActiveAndEnabled={sourceComponent.isActiveAndEnabled} mute={sourceComponent.mute} pitch={sourceComponent.pitch} volume={sourceComponent.volume:F2} spatialBlend={sourceComponent.spatialBlend} pos={FormatHudVector(sourceComponent.transform.position)} {DebugContext()}");
             var playbackEndsAt = Time.time + clip.length + 0.1f;
             var targetKey = GetPlaybackTargetKey(selected.Enemy, selected.Target);
             if (targetKey != 0)
@@ -240,9 +247,28 @@ namespace TFS_Mimics
             hudLastSelectedEnemyPos = selected.Position;
             hudHasSelectedEnemyPos = true;
             currentPlaybackEndsAt = playbackEndsAt;
-            DLog($"Playback started from reusable anchor at enemy={selected.EnemyName} pos={FormatHudVector(selected.Position)} volume={sourceComponent.volume:F2} clipLen={clip.length:F2} source={sourceActor}:{sourceName} {DebugContext()}");
-            StartCoroutine(FollowAudioSourceDuringPlayback(sourceComponent, selected.Enemy, selected.Target, clip.length + 0.1f));
+            DLog($"Playback started on enemy={selected.EnemyName} pos={FormatHudVector(selected.Position)} volume={sourceComponent.volume:F2} clipLen={clip.length:F2} source={sourceActor}:{sourceName} {DebugContext()}");
+            // AudioSource is on the enemy's own target GO, so no position-follow needed.
             StartCoroutine(ResetReusableAudioSourceAfterDelay(sourceComponent, clip.length + 0.1f));
+        }
+
+        // Returns the AudioMixerGroup from the enemy's own AudioSources,
+        // or null to let Unity route through the default output.
+        private static AudioMixerGroup FindEnemyAudioMixerGroup(GameObject enemy, GameObject target)
+        {
+            var root = target != null ? target : enemy;
+            if (root != null)
+            {
+                foreach (var src in root.GetComponentsInChildren<AudioSource>(true))
+                {
+                    if (src != null && src.outputAudioMixerGroup != null)
+                    {
+                        return src.outputAudioMixerGroup;
+                    }
+                }
+            }
+
+            return null; // Unity default output — always audible
         }
 
         private int GetPlaybackTargetKey(GameObject enemy, GameObject target)
@@ -293,31 +319,21 @@ namespace TFS_Mimics
 
         private AudioSource GetOrCreateReusableEnemyAudioSource(GameObject enemy, GameObject target, Vector3 position)
         {
-            var parent = target != null ? target.transform : (enemy != null ? enemy.transform : null);
-            if (parent == null)
+            var keyObj = target != null ? target : enemy;
+            if (keyObj == null)
             {
                 return null;
             }
 
-            var key = parent.GetInstanceID();
-            if (reusableEnemyAudioSources.TryGetValue(key, out var source) && source != null)
+            var key = keyObj.GetInstanceID();
+            if (reusableEnemyAudioSources.TryGetValue(key, out var source) && source != null && source.gameObject != null)
             {
-                var sourceTransform = source.transform;
-                if (sourceTransform.parent != parent)
-                {
-                    sourceTransform.SetParent(parent, true);
-                }
-
-                sourceTransform.position = position;
                 return source;
             }
 
-            var existingAnchor = parent.Find("MimicsAudioAnchor");
-            var anchor = existingAnchor != null ? existingAnchor.gameObject : new GameObject("MimicsAudioAnchor");
-            anchor.transform.SetParent(parent, true);
-            anchor.transform.position = position;
-
-            source = anchor.GetComponent<AudioSource>() ?? anchor.AddComponent<AudioSource>();
+            // Mirror original: get or add AudioSource directly on the enemy's target
+            // object, which is already part of the active game scene hierarchy.
+            source = keyObj.GetComponent<AudioSource>() ?? keyObj.AddComponent<AudioSource>();
             reusableEnemyAudioSources[key] = source;
             return source;
         }

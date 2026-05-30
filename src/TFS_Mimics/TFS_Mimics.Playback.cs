@@ -255,7 +255,8 @@ namespace TFS_Mimics
             hudHasSelectedEnemyPos = true;
             currentPlaybackEndsAt = playbackEndsAt;
             DLog($"Playback started on enemy={selected.EnemyName} pos={FormatHudVector(selected.Position)} volume={sourceComponent.volume:F2} clipLen={clip.length:F2} source={sourceActor}:{sourceName} {DebugContext()}");
-            // AudioSource is on the enemy's own target GO, so no position-follow needed.
+            // The AudioSource proxy is parented to the moving Enemy Controller,
+            // so its world position is updated automatically each frame.
             StartCoroutine(ResetReusableAudioSourceAfterDelay(sourceComponent, clip.length + 0.1f));
         }
 
@@ -326,21 +327,38 @@ namespace TFS_Mimics
 
         private AudioSource GetOrCreateReusableEnemyAudioSource(GameObject enemy, GameObject target, Vector3 position)
         {
-            var keyObj = target != null ? target : enemy;
-            if (keyObj == null)
+            // Resolve the best anchor transform (CenterTransform > VisionTransform > Enemy.transform)
+            // so the proxy follows the enemy body, not the static EnemyParent root.
+            var anchor = GetEnemyAudioAnchor(enemy);
+            if (anchor == null)
             {
                 return null;
             }
 
-            var key = keyObj.GetInstanceID();
+            // Key by anchor instance ID so the dictionary stays consistent.
+            var key = anchor.gameObject.GetInstanceID();
             if (reusableEnemyAudioSources.TryGetValue(key, out var source) && source != null && source.gameObject != null)
             {
                 return source;
             }
 
-            // Mirror original: get or add AudioSource directly on the enemy's target
-            // object, which is already part of the active game scene hierarchy.
-            source = keyObj.GetComponent<AudioSource>() ?? keyObj.AddComponent<AudioSource>();
+            // Dedicated child proxy — never overwrites existing AudioSources on the enemy.
+            // Parented to anchor (CenterTransform) so world position follows automatically.
+            const string proxyName = "MimicsAudio";
+            var existingProxy = anchor.Find(proxyName);
+            GameObject proxyGo;
+            if (existingProxy != null)
+            {
+                proxyGo = existingProxy.gameObject;
+            }
+            else
+            {
+                proxyGo = new GameObject(proxyName);
+                proxyGo.transform.SetParent(anchor, false);
+                proxyGo.transform.localPosition = Vector3.zero;
+            }
+
+            source = proxyGo.GetComponent<AudioSource>() ?? proxyGo.AddComponent<AudioSource>();
             reusableEnemyAudioSources[key] = source;
             return source;
         }
@@ -507,10 +525,28 @@ namespace TFS_Mimics
             return true;
         }
 
+        // Returns the Transform that should serve as the audio anchor for the enemy.
+        // Priority mirrors Imperium: CenterTransform > VisionTransform > Enemy.transform.
+        private Transform GetEnemyAudioAnchor(GameObject enemy)
+        {
+            var enemyParent = enemy.GetComponent<EnemyParent>();
+            if (enemyParent != null && enemyParent.Enemy != null)
+            {
+                var e = enemyParent.Enemy;
+                if (e.CenterTransform != null) return e.CenterTransform;
+                if (e.HasVision && e.Vision != null && e.Vision.VisionTransform != null) return e.Vision.VisionTransform;
+                return e.transform;
+            }
+
+            var t = enemy.transform.Find("Enable/Controller") ?? enemy.transform.Find("Controller");
+            return t != null ? t : enemy.transform;
+        }
+
+        // Kept for backward-compat with BuildPlaybackTargets/GetOrCreateReusableEnemyAudioSource callers
+        // that still pass a GameObject target.
         private GameObject GetEnemyAudioTarget(GameObject enemy)
         {
-            var t = enemy.transform.Find("Enable/Controller") ?? enemy.transform.Find("Controller");
-            return t != null ? t.gameObject : enemy;
+            return GetEnemyAudioAnchor(enemy).gameObject;
         }
 
         private Vector3 GetEnemyDistancePosition(GameObject enemy, GameObject fallbackTarget)

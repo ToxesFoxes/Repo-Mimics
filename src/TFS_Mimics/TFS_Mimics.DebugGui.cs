@@ -15,7 +15,7 @@ namespace TFS_Mimics
         private bool _showGizmos;
         private Rect _debugWindowRect = new Rect(20f, 20f, 520f, 500f);
         private int _debugTab;
-        private Vector2 _scrollMobs, _scrollPlayers, _scrollCache, _scrollVoiceLog;
+        private Vector2 _scrollMobs, _scrollPlayers, _scrollCache, _scrollVoiceLog, _scrollOverlays;
         private const int VoiceLogMaxEntries = 200;
         private readonly List<VoiceLogEntry> _voiceLog = new List<VoiceLogEntry>();
         private readonly HashSet<string> _cacheExpandedPlayers = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
@@ -26,10 +26,10 @@ namespace TFS_Mimics
 
         // ─── Enemy Overlay Manager ────────────────────────────────────────────────
         private readonly Dictionary<int, MimicsEnemyOverlay> _enemyOverlays = new Dictionary<int, MimicsEnemyOverlay>();
-        private readonly Dictionary<int, MimicsAudioMarker>  _audioMarkers  = new Dictionary<int, MimicsAudioMarker>();
+        private readonly Dictionary<int, MimicsAudioMarker> _audioMarkers = new Dictionary<int, MimicsAudioMarker>();
         private float _overlayNextRefresh;
 
-        private static readonly string[] TabNames = { "Mobs", "Players", "Cache", "Voice Log", "Settings" };
+        private static readonly string[] TabNames = { "Mobs", "Players", "Cache", "Voice Log", "Overlays", "Settings" };
 
         // ─── Settings Tab State ───────────────────────────────────────────────────
         private string _settingVolumeBuf;
@@ -292,7 +292,7 @@ namespace TFS_Mimics
 
                 if (!_enemyOverlays.TryGetValue(id, out var overlay) || overlay == null)
                 {
-                    var go  = new GameObject("_MimicsOverlayHost");
+                    var go = new GameObject("_MimicsOverlayHost");
                     overlay = go.AddComponent<MimicsEnemyOverlay>();
                     overlay.Init(ep, transform);
                     _enemyOverlays[id] = overlay;
@@ -332,6 +332,7 @@ namespace TFS_Mimics
                     marker.Init(src);
                     _audioMarkers[id] = marker;
                 }
+                marker.SetVisible(OverlaySettings.ShowAudioMarker);
             }
 
             var toRemoveA = new List<int>();
@@ -426,7 +427,8 @@ namespace TFS_Mimics
                 case 1: DrawPlayersTab(scrollH); break;
                 case 2: DrawCacheTab(scrollH); break;
                 case 3: DrawVoiceLogTab(scrollH); break;
-                case 4: DrawSettingsTab(scrollH); break;
+                case 4: DrawOverlaysTab(scrollH); break;
+                case 5: DrawSettingsTab(scrollH); break;
             }
 
             GUI.DragWindow(new Rect(0f, 0f, _debugWindowRect.width - 28f, 26f));
@@ -440,14 +442,6 @@ namespace TFS_Mimics
             GUILayout.Label(title, _gsH1, GUILayout.ExpandWidth(false));
             GUI.color = Color.white;
             GUILayout.FlexibleSpace();
-            // Gizmo toggle
-            GUI.color = _showGizmos ? CYellow : CTextDim;
-            if (GUILayout.Button(_showGizmos ? "◆ Gizmos" : "◇ Gizmos", _gsBtn, GUILayout.Height(20f), GUILayout.ExpandWidth(false)))
-            {
-                _showGizmos = !_showGizmos;
-                if (!_showGizmos) DestroyAllOverlays();
-            }
-            GUI.color = Color.white;
             GUILayout.Space(6f);
             GUI.color = CTextDim;
             GUILayout.Label(hint, _gsSmall, GUILayout.ExpandWidth(false));
@@ -836,7 +830,7 @@ namespace TFS_Mimics
                 GUILayout.FlexibleSpace();
                 // Show breakdown: folder clips vs API-registered clips
                 var folderCount = customClips.Count(e => e?.SourceMod == null);
-                var apiCount    = customClips.Count(e => e?.SourceMod != null);
+                var apiCount = customClips.Count(e => e?.SourceMod != null);
                 GUI.color = CTextDim;
                 if (folderCount > 0)
                     GUILayout.Label($"{folderCount} folder", _gsSmall);
@@ -1890,6 +1884,69 @@ namespace TFS_Mimics
             GUI.color = Color.white;
 
             GUILayout.EndHorizontal();
+        }
+
+        // ─── Tab 5: Overlays ──────────────────────────────────────────────────────
+        private void DrawOverlaysTab(float scrollH)
+        {
+            _scrollOverlays = GUILayout.BeginScrollView(_scrollOverlays, GUILayout.Height(scrollH));
+
+            // ── Billboard overlays ─────────────────────────────────────────────
+            DrawSettingsSection("Billboard Overlays");
+
+            // Master enable / disable
+            GUILayout.BeginHorizontal(_gsPanelBox);
+            GUI.color = CText;
+            GUILayout.Label("Show Overlays", _gsLabel, GUILayout.Width(200f));
+            GUI.color = Color.white;
+            GUILayout.FlexibleSpace();
+            var before = _showGizmos;
+            var after = GUILayout.Toggle(before, before ? "  ON" : "  OFF", _gsLabel, GUILayout.ExpandWidth(false));
+            if (after != before)
+            {
+                _showGizmos = after;
+                if (!_showGizmos) DestroyAllOverlays();
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Space(2f);
+
+            GUI.color = CTextDim;
+            GUILayout.Label("  Floating billboards above each mob — name, HP, state, distance, playback status.", _gsSmall);
+            GUI.color = Color.white;
+            GUILayout.Space(6f);
+
+            // ── Visible sections ───────────────────────────────────────────────
+            DrawSettingsSection("Visible Sections");
+
+            DrawOverlayToggle("Mob Name", ref OverlaySettings.ShowName);
+            DrawOverlayToggle("HP Bar", ref OverlaySettings.ShowHp);
+            DrawOverlayToggle("AI State", ref OverlaySettings.ShowState);
+            DrawOverlayToggle("Distance", ref OverlaySettings.ShowDistance);
+            DrawOverlayToggle("Playing Indicator", ref OverlaySettings.ShowPlaying);
+            GUILayout.Space(6f);
+
+            // ── Audio Source Marker ────────────────────────────────────────────
+            DrawSettingsSection("Audio Source Marker");
+
+            DrawOverlayToggle("Show Audio Marker", ref OverlaySettings.ShowAudioMarker);
+            GUI.color = CTextDim;
+            GUILayout.Label("  \u266b billboard at the exact AudioSource position on each mob.", _gsSmall);
+            GUI.color = Color.white;
+
+            GUILayout.Space(8f);
+            GUILayout.EndScrollView();
+        }
+
+        private void DrawOverlayToggle(string label, ref bool value)
+        {
+            GUILayout.BeginHorizontal(_gsPanelBox);
+            GUI.color = CText;
+            GUILayout.Label(label, _gsLabel, GUILayout.Width(200f));
+            GUI.color = Color.white;
+            GUILayout.FlexibleSpace();
+            value = GUILayout.Toggle(value, value ? "  ON" : "  OFF", _gsLabel, GUILayout.ExpandWidth(false));
+            GUILayout.EndHorizontal();
+            GUILayout.Space(2f);
         }
 
         // ─── Style Init ───────────────────────────────────────────────────────────

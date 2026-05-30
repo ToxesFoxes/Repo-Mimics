@@ -79,8 +79,6 @@ namespace TFS_Mimics
         private int preSpeechCount;
         private int postSpeechSamplesRemaining;
         private int pendingSilenceSamples;
-        private const float SilenceMergeSeconds = 3f;
-        private const float MergeSilenceBridgeSeconds = 0.2f;
         private const int RecordingBufferSeconds = 30;
         private bool isRecording;
         private bool capturingSpeech;
@@ -94,7 +92,8 @@ namespace TFS_Mimics
         private readonly Dictionary<int, float> playbackBusyUntilByTargetKey = new Dictionary<int, float>();
         private readonly Dictionary<int, float> playbackStartedAtByTargetKey = new Dictionary<int, float>();
         private readonly Dictionary<int, float> playbackClipLengthByTargetKey = new Dictionary<int, float>();
-        private readonly List<CachedAudioEntry> cachedAudio = new List<CachedAudioEntry>();
+        // Static: survives component destruction between levels (PlayerAvatar is recreated per-level)
+        private static readonly List<CachedAudioEntry> cachedAudio = new List<CachedAudioEntry>();
         private string currentPlaybackEnemyName = "None";
         private string currentPlaybackSourcePlayerId = "None";
         private float currentPlaybackEndsAt;
@@ -107,7 +106,8 @@ namespace TFS_Mimics
         private float hudNextRefreshAt;
         private bool wasInLevel;
         private bool persistenceInitialized;
-        private readonly HashSet<string> loadedPersistedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Static: tracks which disk files are already in cachedAudio to prevent duplicates across re-inits
+        private static readonly HashSet<string> loadedPersistedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> playerNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         // Per-player volume overrides: 0-100 (maps same way as configVoiceVolume).
         // -1 means "use global volume". Persisted in players.json.
@@ -154,10 +154,9 @@ namespace TFS_Mimics
             {
                 wasInLevel = false;
                 persistenceInitialized = false;
-                _debugWindowOpen = false;
+                // _debugWindowOpen intentionally NOT reset — window state persists across level transitions
                 _fpmOpen = false;
-                _debugWindowFocused = true;
-                _showGizmos = false;
+                _debugWindowFocused = _debugWindowOpen;
                 DestroyAllOverlays();
                 SetCursorForGui(false);
             }
@@ -267,7 +266,8 @@ namespace TFS_Mimics
                 EnsureCustomAudioLoaded();
                 StartRecording();
                 StartCoroutine(PlayCachedAudioAtRandomIntervals());
-                DLog($"Local loops started: speech capture + random playback {DebugContext()}");
+                StartCoroutine(EnsureEnemyAudioSourcesLoop());
+                DLog($"Local loops started: speech capture + random playback + audio source warmup {DebugContext()}");
             }
             else
             {
@@ -283,6 +283,44 @@ namespace TFS_Mimics
                 DLog($"Next random playback check in {delay:F2}s, cachedClips={cachedAudio.Count} {DebugContext()}");
                 yield return new WaitForSeconds(delay);
                 TryPlayRandomCachedAudio();
+            }
+        }
+
+        private IEnumerator EnsureEnemyAudioSourcesLoop()
+        {
+            while (true)
+            {
+                yield return new WaitForSeconds(10f);
+
+                if (!SemiFunc.RunIsLevel())
+                {
+                    continue;
+                }
+
+                var enemies = GetEnemiesList().Where(e => e != null).ToList();
+                var attached = 0;
+                foreach (var enemy in enemies)
+                {
+                    var anchor = GetEnemyAudioAnchor(enemy);
+                    if (anchor == null)
+                    {
+                        continue;
+                    }
+
+                    var key = anchor.gameObject.GetInstanceID();
+                    if (reusableEnemyAudioSources.TryGetValue(key, out var existing) && existing != null && existing.gameObject != null)
+                    {
+                        continue;
+                    }
+
+                    GetOrCreateReusableEnemyAudioSource(enemy, anchor.gameObject, anchor.position);
+                    attached++;
+                }
+
+                if (attached > 0)
+                {
+                    DLog($"EnsureEnemyAudioSourcesLoop: attached audio proxies to {attached} new enemies, total tracked={reusableEnemyAudioSources.Count} {DebugContext()}");
+                }
             }
         }
     }

@@ -15,13 +15,14 @@ namespace TFS_Mimics
         private sealed class CustomAudioEntry
         {
             public AudioClip Clip;
-            public string    FileName;   // e.g. "scary.wav"
-            public string    FilePath;   // full path for reload (null for API-registered clips)
+            public string FileName;   // e.g. "scary.wav"
+            public string FilePath;   // full path for reload (null for API-registered clips)
             /// <summary>
             /// Display name of the mod that added this clip via <see cref="MimicsAPI"/>.
             /// <c>null</c> means the clip was loaded from the built-in custom-audio folder.
             /// </summary>
-            public string    SourceMod;  // null = custom-audio folder; set = API-registered
+            public string SourceMod;  // null = custom-audio folder; set = API-registered
+            public bool IsNormalized;
         }
 
         // ─── State ───────────────────────────────────────────────────────────────
@@ -71,14 +72,13 @@ namespace TFS_Mimics
             {
                 if (clip == null) continue;
 
-                NormalizeClip(clip);
-
                 _customAudioClips.Add(new CustomAudioEntry
                 {
-                    Clip      = clip,
-                    FileName  = !string.IsNullOrEmpty(clip.name) ? clip.name : modGuid,
-                    FilePath  = null,
+                    Clip = clip,
+                    FileName = !string.IsNullOrEmpty(clip.name) ? clip.name : modGuid,
+                    FilePath = null,
                     SourceMod = displayName,
+                    IsNormalized = false,
                 });
 
                 Log.LogInfo($"[Mimics] API: registered clip '{clip.name}' from mod '{displayName}' (guid={modGuid})");
@@ -113,9 +113,9 @@ namespace TFS_Mimics
             var loaded = 0;
             foreach (var filePath in files)
             {
-                var ext       = Path.GetExtension(filePath).ToLowerInvariant();
+                var ext = Path.GetExtension(filePath).ToLowerInvariant();
                 var audioType = ext == ".mp3" ? AudioType.MPEG : AudioType.WAV;
-                var url       = "file:///" + filePath.Replace('\\', '/');
+                var url = "file:///" + filePath.Replace('\\', '/');
 
                 using (var req = UnityWebRequestMultimedia.GetAudioClip(url, audioType))
                 {
@@ -134,15 +134,14 @@ namespace TFS_Mimics
                         continue;
                     }
 
-                    NormalizeClip(clip);
-
                     clip.name = Path.GetFileNameWithoutExtension(filePath);
                     _customAudioClips.Add(new CustomAudioEntry
                     {
-                        Clip      = clip,
-                        FileName  = Path.GetFileName(filePath),
-                        FilePath  = filePath,
+                        Clip = clip,
+                        FileName = Path.GetFileName(filePath),
+                        FilePath = filePath,
                         SourceMod = null,   // folder-loaded
+                        IsNormalized = false,
                     });
                     loaded++;
                     DLog($"CustomAudio: loaded '{clip.name}' length={clip.length:F1}s freq={clip.frequency}Hz channels={clip.channels}");
@@ -164,7 +163,7 @@ namespace TFS_Mimics
         {
             if (entry?.Clip == null) return;
 
-            var enemies        = GetEnemiesList().Where(e => e != null).ToList();
+            var enemies = GetEnemiesList().Where(e => e != null).ToList();
             var playbackTargets = BuildPlaybackTargets(enemies, true);
 
             if (playbackTargets.Count == 0)
@@ -177,7 +176,7 @@ namespace TFS_Mimics
             }
 
             var listenerPos = transform.position;
-            var nearRadius  = Plugin.configPlaybackNearRadius != null ? Plugin.configPlaybackNearRadius.Value : 25f;
+            var nearRadius = Plugin.configPlaybackNearRadius != null ? Plugin.configPlaybackNearRadius.Value : 25f;
             UpdateNearestPlaybackTargetsHud(playbackTargets, listenerPos, nearRadius);
 
             var inRadiusCandidates = nearestPlaybackCandidatesHud
@@ -191,30 +190,38 @@ namespace TFS_Mimics
             }
 
             var selected = inRadiusCandidates[UnityEngine.Random.Range(0, inRadiusCandidates.Count)];
-            var source   = GetOrCreateReusableEnemyAudioSource(selected.Enemy, selected.Target, selected.Position);
+
+            // Normalize lazily on first playback, not at load time
+            if (!entry.IsNormalized)
+            {
+                NormalizeClip(entry.Clip);
+                entry.IsNormalized = true;
+            }
+
+            var source = GetOrCreateReusableEnemyAudioSource(selected.Enemy, selected.Target, selected.Position);
             if (source == null)
             {
                 Log.LogWarning($"[Mimics] PlayCustomAudioEntry '{entry.FileName}': failed to get AudioSource {DebugContext()}");
                 return;
             }
 
-            source.clip                  = entry.Clip;
-            source.volume                = GetVolumeForPlayer("custom");
-            source.mute                  = false;
-            source.pitch                 = 1f;
-            source.loop                  = false;
-            source.bypassEffects         = false;
+            source.clip = entry.Clip;
+            source.volume = GetVolumeForPlayer("custom");
+            source.mute = false;
+            source.pitch = 1f;
+            source.loop = false;
+            source.bypassEffects = false;
             source.bypassListenerEffects = false;
-            source.spatialBlend          = 1f;
-            source.dopplerLevel          = 0.5f;
-            source.minDistance           = 1f;
-            source.maxDistance           = 20f;
-            source.rolloffMode           = AudioRolloffMode.Linear;
+            source.spatialBlend = 1f;
+            source.dopplerLevel = 0.5f;
+            source.minDistance = 1f;
+            source.maxDistance = 20f;
+            source.rolloffMode = AudioRolloffMode.Linear;
             source.outputAudioMixerGroup = null;
             source.Play();
 
             var playbackEndsAt = Time.time + entry.Clip.length + 0.1f;
-            var targetKey      = GetPlaybackTargetKey(selected.Enemy, selected.Target);
+            var targetKey = GetPlaybackTargetKey(selected.Enemy, selected.Target);
             if (targetKey != 0)
             {
                 playbackBusyUntilByTargetKey[targetKey] = playbackEndsAt;
@@ -222,13 +229,13 @@ namespace TFS_Mimics
                 playbackClipLengthByTargetKey[targetKey] = entry.Clip.length;
             }
 
-            currentPlaybackEnemyName     = selected.EnemyName;
+            currentPlaybackEnemyName = selected.EnemyName;
             currentPlaybackSourcePlayerId = "custom";
-            hudTrackedEnemy              = selected.Enemy;
-            hudTrackedTarget             = selected.Target;
-            hudLastSelectedEnemyPos      = selected.Position;
-            hudHasSelectedEnemyPos       = true;
-            currentPlaybackEndsAt        = playbackEndsAt;
+            hudTrackedEnemy = selected.Enemy;
+            hudTrackedTarget = selected.Target;
+            hudLastSelectedEnemyPos = selected.Position;
+            hudHasSelectedEnemyPos = true;
+            currentPlaybackEndsAt = playbackEndsAt;
 
             DLog($"PlayCustomAudioEntry: playing '{entry.FileName}' length={entry.Clip.length:F1}s on '{selected.EnemyName}' dist={selected.Distance:F1} {DebugContext()}");
         }

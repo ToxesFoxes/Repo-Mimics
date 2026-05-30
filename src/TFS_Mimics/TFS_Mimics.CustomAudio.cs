@@ -100,6 +100,8 @@ namespace TFS_Mimics
                         continue;
                     }
 
+                    NormalizeClip(clip);
+
                     clip.name = Path.GetFileNameWithoutExtension(filePath);
                     _customAudioClips.Add(new CustomAudioEntry
                     {
@@ -108,7 +110,7 @@ namespace TFS_Mimics
                         FilePath = filePath,
                     });
                     loaded++;
-                    DLog($"CustomAudio: loaded '{clip.name}' length={clip.length:F1}s freq={clip.frequency}Hz");
+                    DLog($"CustomAudio: loaded '{clip.name}' length={clip.length:F1}s freq={clip.frequency}Hz channels={clip.channels}");
                 }
             }
 
@@ -191,6 +193,42 @@ namespace TFS_Mimics
             currentPlaybackEndsAt        = playbackEndsAt;
 
             DLog($"PlayCustomAudioEntry: playing '{entry.FileName}' length={entry.Clip.length:F1}s on '{selected.EnemyName}' dist={selected.Distance:F1} {DebugContext()}");
+        }
+        // ─── Normalization ────────────────────────────────────────────────────────
+        private const float NormalizeTarget = 0.85f;   // peak target: leaves 15% headroom
+
+        /// <summary>
+        /// Peak-normalises an AudioClip in-place so custom files always play at a
+        /// consistent loudness regardless of how loudly they were mastered.
+        /// Works across all channels (stereo / mono).
+        /// </summary>
+        private static void NormalizeClip(AudioClip clip)
+        {
+            if (clip == null) return;
+
+            var samples = new float[clip.samples * clip.channels];
+            if (!clip.GetData(samples, 0)) return;
+
+            // Find peak absolute value
+            var peak = 0f;
+            for (var i = 0; i < samples.Length; i++)
+            {
+                var abs = Mathf.Abs(samples[i]);
+                if (abs > peak) peak = abs;
+            }
+
+            // Skip silent or already-near-zero clips
+            if (peak < 0.0001f) return;
+
+            var scale = NormalizeTarget / peak;
+
+            // Already loud enough — don't amplify if it would exceed target
+            if (scale >= 1f && peak >= NormalizeTarget) return;
+
+            for (var i = 0; i < samples.Length; i++)
+                samples[i] *= scale;
+
+            clip.SetData(samples, 0);
         }
     }
 }

@@ -246,6 +246,7 @@ namespace TFS_Mimics
             if (photonView.IsMine && SemiFunc.RunIsLevel())
             {
                 EnsurePersistenceInitialized();
+                EnsureCustomAudioLoaded();
                 StartRecording();
                 StartCoroutine(PlayCachedAudioAtRandomIntervals());
                 DLog($"Local loops started: speech capture + random playback {DebugContext()}");

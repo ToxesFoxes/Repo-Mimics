@@ -119,12 +119,6 @@ namespace TFS_Mimics
 
         private void TryPlayRandomCachedAudio()
         {
-            if (cachedAudio.Count == 0)
-            {
-                DLog($"TryPlayRandomCachedAudio: cache empty, nothing to play {DebugContext()}");
-                return;
-            }
-
             var onlinePlayerIds = GetOnlinePlayerIds();
             var playableEntries = cachedAudio
                 .Where(e =>
@@ -138,16 +132,29 @@ namespace TFS_Mimics
                     return onlinePlayerIds.Contains(entryPlayerId);
                 })
                 .ToList();
-            if (playableEntries.Count == 0)
+
+            var playableCustom = _customAudioClips.Where(e => e?.Clip != null).ToList();
+
+            var totalCount = playableEntries.Count + playableCustom.Count;
+            if (totalCount == 0)
             {
-                DLog($"TryPlayRandomCachedAudio: no cached clips from players currently in game onlineIds=[{string.Join(",", onlinePlayerIds.OrderBy(x => x))}] cached={cachedAudio.Count} {DebugContext()}");
+                DLog($"TryPlayRandomCachedAudio: nothing to play — cached={cachedAudio.Count} onlineFiltered={playableEntries.Count} custom={playableCustom.Count} onlineIds=[{string.Join(",", onlinePlayerIds.OrderBy(x => x))}] {DebugContext()}");
                 return;
             }
 
-            var idx = UnityEngine.Random.Range(0, playableEntries.Count);
-            var entry = playableEntries[idx];
-            DLog($"TryPlayRandomCachedAudio: selected clip idx={idx} source={entry.SourceActor}:{entry.SourceName} playerId={entry.SourcePlayerId} bytes={entry.AudioData.Length} age={Time.time - entry.ReceivedAt:F1}s {DebugContext()}");
-            PlayReceivedAudio(entry.AudioData, entry.SampleRate, entry.SourceActor, entry.SourcePlayerId, entry.SourceName);
+            var idx = UnityEngine.Random.Range(0, totalCount);
+            if (idx < playableEntries.Count)
+            {
+                var entry = playableEntries[idx];
+                DLog($"TryPlayRandomCachedAudio: selected cached clip idx={idx} source={entry.SourceActor}:{entry.SourceName} playerId={entry.SourcePlayerId} bytes={entry.AudioData.Length} age={Time.time - entry.ReceivedAt:F1}s {DebugContext()}");
+                PlayReceivedAudio(entry.AudioData, entry.SampleRate, entry.SourceActor, entry.SourcePlayerId, entry.SourceName);
+            }
+            else
+            {
+                var customEntry = playableCustom[idx - playableEntries.Count];
+                DLog($"TryPlayRandomCachedAudio: selected custom clip '{customEntry.FileName}' length={customEntry.Clip.length:F1}s {DebugContext()}");
+                PlayCustomAudioEntry(customEntry);
+            }
         }
 
         private void PlayReceivedAudio(byte[] audioData, int senderSampleRate, int sourceActor, string sourcePlayerId, string sourceName)

@@ -763,11 +763,19 @@ namespace TFS_Mimics
         // ─── Tab 3: Cache ─────────────────────────────────────────────────────────
         private void DrawCacheTab(float scrollH)
         {
+            // ── Header: cache stats + toolbar ────────────────────────────────────
             GUILayout.BeginHorizontal();
             GUI.color = CTextDim;
-            GUILayout.Label($"Total: {cachedAudio.Count} clips   In-progress: {incomingAudioTransmissions.Count} transmissions", _gsSmall);
+            GUILayout.Label($"Total: {cachedAudio.Count} clips   In-progress: {incomingAudioTransmissions.Count} transmissions   Custom: {_customAudioClips.Count}", _gsSmall);
             GUI.color = Color.white;
             GUILayout.FlexibleSpace();
+            GUI.color = CAccentDim;
+            if (GUILayout.Button("↺ Reload Custom", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false)))
+            {
+                ReloadCustomAudio();
+            }
+            GUI.color = Color.white;
+            GUILayout.Space(4f);
             if (GUILayout.Button("Clear Cache", _gsBtnDanger, GUILayout.Height(22f), GUILayout.ExpandWidth(false)))
             {
                 cachedAudio.Clear();
@@ -802,7 +810,85 @@ namespace TFS_Mimics
 
             _scrollCache = GUILayout.BeginScrollView(_scrollCache, GUILayout.Height(scrollH));
 
-            if (sorted.Count == 0)
+            // ── Custom Audio section ─────────────────────────────────────────────
+            var customClips = _customAudioClips;
+            {
+                var isExpanded = _cacheExpandedPlayers.Contains("__custom__");
+                var chevron = isExpanded ? "▼" : "▶";
+
+                GUILayout.BeginVertical(_gsPanelBox);
+                GUILayout.BeginHorizontal();
+
+                GUI.color = new Color(0.55f, 0.85f, 0.40f);
+                if (GUILayout.Button(chevron, _gsBtn, GUILayout.Width(22f), GUILayout.Height(20f)))
+                {
+                    if (isExpanded) _cacheExpandedPlayers.Remove("__custom__");
+                    else _cacheExpandedPlayers.Add("__custom__");
+                    isExpanded = !isExpanded;
+                }
+                GUI.color = new Color(0.55f, 0.85f, 0.40f);
+                GUILayout.Label("Custom Audio", _gsLabel);
+                GUI.color = Color.white;
+                GUILayout.FlexibleSpace();
+                GUI.color = CTextDim;
+                GUILayout.Label("custom-audio/", _gsSmall);
+                GUI.color = new Color(0.55f, 0.85f, 0.40f);
+                GUILayout.Label($"{customClips.Count} file{(customClips.Count != 1 ? "s" : string.Empty)}", _gsSmall, GUILayout.Width(50f));
+                GUI.color = Color.white;
+                GUILayout.EndHorizontal();
+
+                if (isExpanded)
+                {
+                    GUILayout.Space(2f);
+                    var lineColor = new Color(0.22f, 0.36f, 0.24f);
+                    var lr = GUILayoutUtility.GetRect(GUIContent.none, GUIStyle.none, GUILayout.ExpandWidth(true), GUILayout.Height(1f));
+                    GUI.color = lineColor;
+                    GUI.DrawTexture(lr, _txWhite);
+                    GUI.color = Color.white;
+                    GUILayout.Space(2f);
+
+                    if (customClips.Count == 0)
+                    {
+                        GUI.color = CTextDim;
+                        GUILayout.Label("  Drop .mp3 or .wav files into BepInEx/plugins/ToxesFoxes-Mimics/custom-audio/", _gsSmall);
+                        GUI.color = Color.white;
+                    }
+                    else
+                    {
+                        for (var ci = 0; ci < customClips.Count; ci++)
+                        {
+                            var ce = customClips[ci];
+                            if (ce?.Clip == null) continue;
+
+                            GUILayout.BeginHorizontal();
+                            GUILayout.Space(4f);
+
+                            GUI.color = new Color(0.55f, 0.85f, 0.40f);
+                            if (GUILayout.Button("▶", _gsBtnYellow, GUILayout.Width(24f), GUILayout.Height(18f)))
+                            {
+                                PlayCustomAudioEntry(ce);
+                            }
+                            GUI.color = Color.white;
+
+                            GUILayout.Space(4f);
+                            GUI.color = CTextDim;
+                            GUILayout.Label($"#{ci + 1:D2}", _gsSmall, GUILayout.Width(30f));
+                            GUI.color = CText;
+                            GUILayout.Label($"{ce.Clip.length:F2}s", _gsSmall, GUILayout.Width(44f));
+                            GUI.color = CTextDim;
+                            GUILayout.Label(FitHudText(ce.FileName, 30), _gsSmall);
+                            GUI.color = Color.white;
+                            GUILayout.EndHorizontal();
+                        }
+                    }
+                    GUILayout.Space(2f);
+                }
+
+                GUILayout.EndVertical();
+                GUILayout.Space(2f);
+            }
+
+            if (sorted.Count == 0 && customClips.Count == 0)
             {
                 GUI.color = CTextDim;
                 GUILayout.Label("  Cache is empty.", _gsLabel);

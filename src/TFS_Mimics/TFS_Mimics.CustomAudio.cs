@@ -199,7 +199,7 @@ namespace TFS_Mimics
             }
 
             source.clip                  = entry.Clip;
-            source.volume                = Mathf.Clamp01(Plugin.configVoiceVolume.Value / 20f);
+            source.volume                = GetVolumeForPlayer("custom");
             source.mute                  = false;
             source.pitch                 = 1f;
             source.loop                  = false;

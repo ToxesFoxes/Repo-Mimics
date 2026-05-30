@@ -40,6 +40,8 @@ namespace TFS_Mimics
         private string _settingNormalizeBuf;
         private bool _settingsDirty;
         private Vector2 _scrollSettings;
+        // Per-player volume slider text buffers (keyed by persistent player ID)
+        private readonly Dictionary<string, string> _playerVolBuf = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         // ─── Force-Play Modal State ──────────────────────────────────────────────
         private bool _fpmOpen;
@@ -961,6 +963,63 @@ namespace TFS_Mimics
                 GUI.color = Color.white;
                 GUILayout.EndHorizontal();
 
+                // ── Per-player volume slider ─────────────────────────────────────
+                {
+                    if (!_playerVolBuf.TryGetValue(pid, out var volBuf))
+                    {
+                        var currentVol = playerVolumeOverrides.TryGetValue(pid, out var v) && v >= 0 ? v : -1;
+                        volBuf = currentVol >= 0 ? currentVol.ToString() : string.Empty;
+                        _playerVolBuf[pid] = volBuf;
+                    }
+                    var storedVol = playerVolumeOverrides.TryGetValue(pid, out var sv) && sv >= 0 ? sv : -1;
+
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Space(26f);
+                    GUI.color = CTextDim;
+                    GUILayout.Label("Vol:", _gsSmall, GUILayout.Width(26f));
+                    GUI.color = Color.white;
+
+                    // Slider: -1 = global, 0-100 = override
+                    var sliderCurrent = storedVol >= 0 ? storedVol : (Plugin.configVoiceVolume?.Value ?? 100);
+                    var newSlider = GUILayout.HorizontalSlider(sliderCurrent, 0f, 100f, GUILayout.Width(90f), GUILayout.Height(12f));
+                    var newInt = Mathf.RoundToInt(newSlider);
+                    if (newInt != storedVol && newInt != sliderCurrent)
+                    {
+                        playerVolumeOverrides[pid] = Mathf.Clamp(newInt, 0, 100);
+                        _playerVolBuf[pid] = playerVolumeOverrides[pid].ToString();
+                        SavePlayersIndexToDisk();
+                    }
+
+                    GUI.SetNextControlName("pvol_" + pid);
+                    var newBuf = GUILayout.TextField(volBuf, 3, _gsLabel, GUILayout.Width(32f));
+                    if (newBuf != volBuf)
+                    {
+                        _playerVolBuf[pid] = newBuf;
+                        if (int.TryParse(newBuf, out var parsed))
+                        {
+                            playerVolumeOverrides[pid] = Mathf.Clamp(parsed, 0, 100);
+                            SavePlayersIndexToDisk();
+                        }
+                    }
+
+                    GUI.color = CTextDim;
+                    GUILayout.Label("%", _gsSmall, GUILayout.Width(14f));
+                    GUI.color = Color.white;
+
+                    if (storedVol >= 0)
+                    {
+                        if (GUILayout.Button("↺", _gsBtn, GUILayout.Width(20f), GUILayout.Height(16f)))
+                        {
+                            playerVolumeOverrides.Remove(pid);
+                            _playerVolBuf.Remove(pid);
+                            SavePlayersIndexToDisk();
+                        }
+                    }
+
+                    GUILayout.FlexibleSpace();
+                    GUILayout.EndHorizontal();
+                }
+
                 // ── Clip list (expanded) ─────────────────────────────────────────
                 if (isExpanded)
                 {
@@ -1696,7 +1755,7 @@ namespace TFS_Mimics
             }
 
             source.clip = clip;
-            source.volume = Mathf.Clamp01(Plugin.configVoiceVolume.Value / 20f);
+            source.volume = GetVolumeForPlayer(entry.SourcePlayerId);
             source.mute = false;
             source.pitch = 1f;
             source.loop = false;

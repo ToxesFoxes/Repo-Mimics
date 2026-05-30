@@ -69,6 +69,14 @@ namespace TFS_Mimics
                 _canvas.gameObject.SetActive(v);
         }
 
+        private void OnDestroy()
+        {
+            // Destroy the canvas child GO explicitly — Destroy(component) alone
+            // does NOT remove child GameObjects, leaving zombie panels on the AudioSource GO.
+            if (_canvas != null)
+                Destroy(_canvas.gameObject);
+        }
+
         // ─── Lifecycle ───────────────────────────────────────────────────────────
         private void Update()
         {

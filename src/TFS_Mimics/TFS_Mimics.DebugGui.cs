@@ -362,9 +362,12 @@ namespace TFS_Mimics
 
             foreach (var kv in _audioMarkers)
             {
-                if (kv.Value != null) Destroy(kv.Value);
+                if (kv.Value != null) Destroy(kv.Value);  // OnDestroy will also destroy the canvas child
             }
             _audioMarkers.Clear();
+
+            // Reset timer so overlays recreate immediately when Gizmos are re-enabled
+            _overlayNextRefresh = 0f;
         }
 
         private void HandleResizeInput()

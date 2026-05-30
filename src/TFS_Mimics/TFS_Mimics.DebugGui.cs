@@ -831,8 +831,18 @@ namespace TFS_Mimics
                 GUILayout.Label("Custom Audio", _gsLabel);
                 GUI.color = Color.white;
                 GUILayout.FlexibleSpace();
+                // Show breakdown: folder clips vs API-registered clips
+                var folderCount = customClips.Count(e => e?.SourceMod == null);
+                var apiCount    = customClips.Count(e => e?.SourceMod != null);
                 GUI.color = CTextDim;
-                GUILayout.Label("custom-audio/", _gsSmall);
+                if (folderCount > 0)
+                    GUILayout.Label($"{folderCount} folder", _gsSmall);
+                if (apiCount > 0)
+                {
+                    if (folderCount > 0) { GUI.color = CTextDim; GUILayout.Label("|", _gsSmall, GUILayout.Width(10f)); }
+                    GUI.color = CAccent;
+                    GUILayout.Label($"{apiCount} mod", _gsSmall);
+                }
                 GUI.color = new Color(0.55f, 0.85f, 0.40f);
                 GUILayout.Label($"{customClips.Count} file{(customClips.Count != 1 ? "s" : string.Empty)}", _gsSmall, GUILayout.Width(50f));
                 GUI.color = Color.white;
@@ -877,7 +887,20 @@ namespace TFS_Mimics
                             GUI.color = CText;
                             GUILayout.Label($"{ce.Clip.length:F2}s", _gsSmall, GUILayout.Width(44f));
                             GUI.color = CTextDim;
-                            GUILayout.Label(FitHudText(ce.FileName, 30), _gsSmall);
+                            // Filename — truncated to leave room for the source tag
+                            GUILayout.Label(FitHudText(ce.FileName, ce.SourceMod != null ? 22 : 30), _gsSmall);
+                            GUILayout.FlexibleSpace();
+                            // Source tag: dim gray for folder, accent blue for API mods
+                            if (ce.SourceMod != null)
+                            {
+                                GUI.color = CAccent;
+                                GUILayout.Label($"[{FitHudText(ce.SourceMod, 20)}]", _gsSmall, GUILayout.Width(130f));
+                            }
+                            else
+                            {
+                                GUI.color = CTextDim;
+                                GUILayout.Label("[folder]", _gsSmall, GUILayout.Width(55f));
+                            }
                             GUI.color = Color.white;
                             GUILayout.EndHorizontal();
                         }

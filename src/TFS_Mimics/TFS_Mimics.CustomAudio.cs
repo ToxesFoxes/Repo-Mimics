@@ -16,7 +16,12 @@ namespace TFS_Mimics
         {
             public AudioClip Clip;
             public string    FileName;   // e.g. "scary.wav"
-            public string    FilePath;   // full path for reload
+            public string    FilePath;   // full path for reload (null for API-registered clips)
+            /// <summary>
+            /// Display name of the mod that added this clip via <see cref="MimicsAPI"/>.
+            /// <c>null</c> means the clip was loaded from the built-in custom-audio folder.
+            /// </summary>
+            public string    SourceMod;  // null = custom-audio folder; set = API-registered
         }
 
         // ─── State ───────────────────────────────────────────────────────────────
@@ -37,18 +42,47 @@ namespace TFS_Mimics
             StartCoroutine(LoadCustomAudioClipsCoroutine());
         }
 
-        /// <summary>Reload: clears existing clips and re-scans the folder.</summary>
+        /// <summary>Reload: re-scans the folder. API-registered clips are preserved.</summary>
         internal void ReloadCustomAudio()
         {
-            // Unload previously loaded clips to free memory
+            // Only destroy and remove folder-loaded clips (SourceMod == null).
+            // API-registered clips (SourceMod != null) are kept in the list.
             foreach (var entry in _customAudioClips)
             {
-                if (entry?.Clip != null)
+                if (entry?.SourceMod == null && entry?.Clip != null)
                     Destroy(entry.Clip);
             }
-            _customAudioClips.Clear();
+            _customAudioClips.RemoveAll(e => e?.SourceMod == null);
             _customAudioLoaded = false;
             EnsureCustomAudioLoaded();
+        }
+
+        // ─── API clip consumer ────────────────────────────────────────────────────
+        /// <summary>
+        /// Drains any clips queued via <see cref="MimicsAPI"/> and adds them to the pool.
+        /// Safe to call multiple times — clips are only consumed once.
+        /// </summary>
+        internal void ConsumeApiClips()
+        {
+            var pending = MimicsAPI.TakePending();
+            if (pending == null) return;
+
+            foreach (var (modGuid, displayName, clip) in pending)
+            {
+                if (clip == null) continue;
+
+                NormalizeClip(clip);
+
+                _customAudioClips.Add(new CustomAudioEntry
+                {
+                    Clip      = clip,
+                    FileName  = !string.IsNullOrEmpty(clip.name) ? clip.name : modGuid,
+                    FilePath  = null,
+                    SourceMod = displayName,
+                });
+
+                Log.LogInfo($"[Mimics] API: registered clip '{clip.name}' from mod '{displayName}' (guid={modGuid})");
+            }
         }
 
         // ─── Coroutine loader ─────────────────────────────────────────────────────
@@ -105,9 +139,10 @@ namespace TFS_Mimics
                     clip.name = Path.GetFileNameWithoutExtension(filePath);
                     _customAudioClips.Add(new CustomAudioEntry
                     {
-                        Clip     = clip,
-                        FileName = Path.GetFileName(filePath),
-                        FilePath = filePath,
+                        Clip      = clip,
+                        FileName  = Path.GetFileName(filePath),
+                        FilePath  = filePath,
+                        SourceMod = null,   // folder-loaded
                     });
                     loaded++;
                     DLog($"CustomAudio: loaded '{clip.name}' length={clip.length:F1}s freq={clip.frequency}Hz channels={clip.channels}");
@@ -115,6 +150,9 @@ namespace TFS_Mimics
             }
 
             Log.LogInfo($"[Mimics] Custom audio: loaded {loaded}/{files.Count} file(s) successfully");
+
+            // Consume any clips that were registered via MimicsAPI before or during loading.
+            ConsumeApiClips();
         }
 
         // ─── Playback ─────────────────────────────────────────────────────────────

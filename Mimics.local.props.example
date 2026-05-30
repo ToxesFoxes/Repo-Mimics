@@ -1,8 +1,0 @@
-<Project>
-  <PropertyGroup>
-    <!-- Folder containing REPO.exe and REPO_Data -->
-    <GameDir>D:\SteamLibrary\steamapps\common\REPO</GameDir>
-    <!-- BepInEx root for your game/profile -->
-    <BepInExDir>C:\Users\YourUser\AppData\Roaming\r2modmanPlus-local\REPO\profiles\YourProfile\BepInEx</BepInExDir>
-  </PropertyGroup>
-</Project>

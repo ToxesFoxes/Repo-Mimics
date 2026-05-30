@@ -151,9 +151,7 @@ namespace TFS_Mimics
                 return;
             }
 
-            if (hudTextStyle == null)
-            {
-                hudTextStyle = new GUIStyle(GUI.skin.label)
+            hudTextStyle ??= new GUIStyle(GUI.skin.label)
                 {
                     alignment = TextAnchor.UpperLeft,
                     fontSize = 10,
@@ -163,7 +161,6 @@ namespace TFS_Mimics
                         textColor = Color.white
                     }
                 };
-            }
 
             var activePlaybackName = Time.time <= currentPlaybackEndsAt ? currentPlaybackEnemyName : "None";
             var activePlaybackSourcePlayerId = Time.time <= currentPlaybackEndsAt ? currentPlaybackSourcePlayerId : "None";

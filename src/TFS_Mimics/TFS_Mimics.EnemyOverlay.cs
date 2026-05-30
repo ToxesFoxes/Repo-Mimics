@@ -1,9 +1,20 @@
-using System.Reflection;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace TFS_Mimics
 {
+    /// <summary>
+    /// Global display settings for all MimicsEnemyOverlay instances.
+    /// Toggled from the DebugGui "Overlays" tab.
+    /// </summary>
+    internal static class OverlaySettings
+    {
+        public static bool ShowHp = true;
+        public static bool ShowState = true;
+        public static bool ShowDistance = true;
+        public static bool ShowPlaying = true;
+    }
+
     /// <summary>
     /// World-space billboard panel that floats above an enemy and shows name, HP bar,
     /// current AI state, distance and a "PLAYING" indicator.
@@ -33,45 +44,45 @@ namespace TFS_Mimics
         }
 
         // ─── Colors (mirror DebugGui palette) ────────────────────────────────────
-        private static readonly Color CAccent  = new Color(0.35f, 0.65f, 1.00f);
-        private static readonly Color CBgDark  = new Color(0.06f, 0.08f, 0.12f, 0.88f);
+        private static readonly Color CAccent = new Color(0.35f, 0.65f, 1.00f);
+        private static readonly Color CBgDark = new Color(0.06f, 0.08f, 0.12f, 0.88f);
         private static readonly Color CBgPanel = new Color(0.10f, 0.13f, 0.18f, 0.72f);
-        private static readonly Color CGreen   = new Color(0.30f, 0.85f, 0.40f);
-        private static readonly Color CYellow  = new Color(1.00f, 0.80f, 0.20f);
-        private static readonly Color CRed     = new Color(0.90f, 0.25f, 0.25f);
-        private static readonly Color CText    = new Color(0.90f, 0.92f, 0.95f);
-        private static readonly Color CDim     = new Color(0.55f, 0.60f, 0.65f);
+        private static readonly Color CGreen = new Color(0.30f, 0.85f, 0.40f);
+        private static readonly Color CYellow = new Color(1.00f, 0.80f, 0.20f);
+        private static readonly Color CRed = new Color(0.90f, 0.25f, 0.25f);
+        private static readonly Color CText = new Color(0.90f, 0.92f, 0.95f);
+        private static readonly Color CDim = new Color(0.55f, 0.60f, 0.65f);
 
         // ─── Layout constants ────────────────────────────────────────────────────
-        private const float PanelW     = 160f;
-        private const float PanelH     = 82f;
+        private const float PanelW = 160f;
+        private const float PanelH = 82f;
         private const float WorldScale = 0.012f;   // world-unit size: ~1.92 × 0.98 m
-        private const float HeadOffset = 2.4f;     // metres above EnemyParent origin
-        private const float DataHz     = 0.2f;     // data refresh interval
+        private const float HeadOffset = 0.8f;     // metres above CenterTransform
+        private const float DataHz = 0.2f;     // data refresh interval
 
         // ─── Runtime state ───────────────────────────────────────────────────────
         private EnemyParent _enemyParent;
-        private Transform   _playerTransform;
+        private Transform _playerTransform;
 
-        private Canvas          _canvas;
-        private RectTransform   _canvasRect;
-        private Image           _hpFill;
-        private Text            _nameText;
-        private Text            _hpText;
-        private Text            _stateText;
-        private Text            _distText;
-        private Image           _playingBg;
-        private Text            _playingText;
+        private Canvas _canvas;
+        private RectTransform _canvasRect;
+        private Image _hpFill;
+        private Text _nameText;
+        private Text _hpText;
+        private Text _stateText;
+        private Text _distText;
+        private Image _playingBg;
+        private Text _playingText;
 
-        private float  _nextRefresh;
-        private float  _smoothHp = 1f;
+        private float _nextRefresh;
+        private float _smoothHp = 1f;
 
         public bool IsPlayingAudio { get; set; }
 
         // ─── Public init ─────────────────────────────────────────────────────────
         public void Init(EnemyParent enemyParent, Transform playerTransform)
         {
-            _enemyParent     = enemyParent;
+            _enemyParent = enemyParent;
             _playerTransform = playerTransform;
             BuildUI();
         }
@@ -90,6 +101,15 @@ namespace TFS_Mimics
             RefreshData();
         }
 
+        private Transform GetAnchor()
+        {
+            if (_enemyParent == null || _enemyParent.Enemy == null) return null;
+            var e = _enemyParent.Enemy;
+            if (e.CenterTransform != null) return e.CenterTransform;
+            if (e.HasVision && e.Vision != null && e.Vision.VisionTransform != null) return e.Vision.VisionTransform;
+            return e.transform;
+        }
+
         private void LateUpdate()
         {
             if (_canvas == null || _enemyParent == null) return;
@@ -97,8 +117,11 @@ namespace TFS_Mimics
             var cam = Camera.main;
             if (cam == null) return;
 
-            // Place panel above enemy
-            _canvasRect.position = _enemyParent.transform.position + Vector3.up * HeadOffset;
+            var anchor = GetAnchor();
+            if (anchor == null) return;
+
+            // Place panel above CenterTransform (like Imperium HP bar)
+            _canvasRect.position = anchor.position + Vector3.up * HeadOffset;
 
             // Billboard: keep panel parallel to the camera's view plane
             _canvasRect.rotation = cam.transform.rotation;
@@ -116,11 +139,11 @@ namespace TFS_Mimics
             var go = new GameObject("_MimicsOverlayCanvas");
             go.transform.SetParent(transform, false);
 
-            _canvas             = go.AddComponent<Canvas>();
-            _canvas.renderMode  = RenderMode.WorldSpace;
+            _canvas = go.AddComponent<Canvas>();
+            _canvas.renderMode = RenderMode.WorldSpace;
             _canvas.sortingOrder = 100;
 
-            _canvasRect           = go.GetComponent<RectTransform>();
+            _canvasRect = go.GetComponent<RectTransform>();
             _canvasRect.sizeDelta = new Vector2(PanelW, PanelH);
             _canvasRect.localScale = Vector3.one * WorldScale;
 
@@ -145,16 +168,16 @@ namespace TFS_Mimics
             // HP bar fill (inside hpBg, uses Image.fillAmount)
             var hpFillGo = new GameObject("hp_fill");
             hpFillGo.transform.SetParent(hpBg.transform, false);
-            _hpFill         = hpFillGo.AddComponent<Image>();
-            _hpFill.sprite  = GetSprite();
-            _hpFill.type    = Image.Type.Filled;
+            _hpFill = hpFillGo.AddComponent<Image>();
+            _hpFill.sprite = GetSprite();
+            _hpFill.type = Image.Type.Filled;
             _hpFill.fillMethod = Image.FillMethod.Horizontal;
             _hpFill.fillAmount = 1f;
-            _hpFill.color   = CGreen;
-            var hfr         = hpFillGo.GetComponent<RectTransform>();
-            hfr.anchorMin   = Vector2.zero;
-            hfr.anchorMax   = Vector2.one;
-            hfr.offsetMin   = hfr.offsetMax = Vector2.zero;
+            _hpFill.color = CGreen;
+            var hfr = hpFillGo.GetComponent<RectTransform>();
+            hfr.anchorMin = Vector2.zero;
+            hfr.anchorMax = Vector2.one;
+            hfr.offsetMin = hfr.offsetMax = Vector2.zero;
 
             // HP text (centred over bar)
             _hpText = MkText(go.transform, "hp_text", 9, FontStyle.Normal, CText);
@@ -176,7 +199,7 @@ namespace TFS_Mimics
 
             _playingText = MkText(go.transform, "playing_text", 10, FontStyle.Bold, new Color(0f, 0f, 0f, 0f));
             SetAnch(_playingText.rectTransform, 0.04f, 0.96f, 0f, 0.26f);
-            _playingText.text      = "\u25b6  MIMICS PLAYING";
+            _playingText.text = "\u25b6  MIMICS PLAYING";
             _playingText.alignment = TextAnchor.MiddleCenter;
         }
 
@@ -192,152 +215,97 @@ namespace TFS_Mimics
 
             // HP
             TryGetHealth(out var hpCur, out var hpMax);
+            var showHp = OverlaySettings.ShowHp;
             if (_hpFill != null)
             {
-                if (hpMax > 0)
+                _hpFill.transform.parent.gameObject.SetActive(showHp);
+                if (showHp)
                 {
-                    var t = Mathf.Clamp01((float)hpCur / hpMax);
-                    _smoothHp = Mathf.Lerp(_smoothHp, t, 0.35f);
-                    _hpFill.fillAmount = _smoothHp;
-                    // Green → Yellow → Red gradient
-                    _hpFill.color = _smoothHp > 0.5f
-                        ? Color.Lerp(CYellow, CGreen, (_smoothHp - 0.5f) * 2f)
-                        : Color.Lerp(CRed, CYellow, _smoothHp * 2f);
-                }
-                else
-                {
-                    _hpFill.fillAmount = 1f;
-                    _hpFill.color = CDim;
+                    if (hpMax > 0)
+                    {
+                        var t = Mathf.Clamp01((float)hpCur / hpMax);
+                        _smoothHp = Mathf.Lerp(_smoothHp, t, 0.35f);
+                        _hpFill.fillAmount = _smoothHp;
+                        // Green → Yellow → Red gradient
+                        _hpFill.color = _smoothHp > 0.5f
+                            ? Color.Lerp(CYellow, CGreen, (_smoothHp - 0.5f) * 2f)
+                            : Color.Lerp(CRed, CYellow, _smoothHp * 2f);
+                    }
+                    else
+                    {
+                        _hpFill.fillAmount = 1f;
+                        _hpFill.color = CDim;
+                    }
                 }
             }
             if (_hpText != null)
-                _hpText.text = hpMax > 0 ? $"{hpCur} / {hpMax} HP" : "HP: —";
+            {
+                _hpText.gameObject.SetActive(showHp);
+                if (showHp) _hpText.text = hpMax > 0 ? $"{hpCur} / {hpMax} HP" : "HP: —";
+            }
 
             // State
-            var state = TryGetState();
-            if (_stateText != null) _stateText.text = state ?? "—";
-
-            // Distance
-            if (_distText != null && _playerTransform != null)
+            if (_stateText != null)
             {
-                var d = Vector3.Distance(_enemyParent.transform.position, _playerTransform.position);
-                _distText.text = $"{d:F1} m";
+                _stateText.gameObject.SetActive(OverlaySettings.ShowState);
+                if (OverlaySettings.ShowState)
+                    _stateText.text = _enemyParent.Enemy != null ? _enemyParent.Enemy.CurrentState.ToString() : "—";
+            }
+
+            // Distance (from actual enemy body position)
+            if (_distText != null)
+            {
+                _distText.gameObject.SetActive(OverlaySettings.ShowDistance);
+                if (OverlaySettings.ShowDistance && _playerTransform != null)
+                {
+                    var anchor = GetAnchor();
+                    var pos = anchor != null ? anchor.position : _enemyParent.transform.position;
+                    _distText.text = $"{Vector3.Distance(pos, _playerTransform.position):F1} m";
+                }
             }
 
             // Playing indicator
             if (_playingBg != null && _playingText != null)
             {
-                var playColor = IsPlayingAudio ? new Color(CGreen.r, CGreen.g, CGreen.b, 0.18f) : new Color(0f, 0f, 0f, 0f);
-                var textColor = IsPlayingAudio ? CGreen : new Color(0f, 0f, 0f, 0f);
-                _playingBg.color   = playColor;
-                _playingText.color = textColor;
+                var show = OverlaySettings.ShowPlaying && IsPlayingAudio;
+                _playingBg.color = show ? new Color(CGreen.r, CGreen.g, CGreen.b, 0.18f) : new Color(0f, 0f, 0f, 0f);
+                _playingText.color = show ? CGreen : new Color(0f, 0f, 0f, 0f);
             }
         }
 
-        // ─── Reflection: HP ──────────────────────────────────────────────────────
-        private static FieldInfo _fEnemyOnParent;
-        private static FieldInfo _fHealthOnEnemy;
-        private static FieldInfo _fHealthCurrent;
-        private static FieldInfo _fHealthMax;
-        private static FieldInfo _fCurrentState;
-
-        private static void EnsureReflection(EnemyParent parent)
-        {
-            // Cache parent → Enemy field
-            if (_fEnemyOnParent == null)
-            {
-                var pt = parent.GetType();
-                _fEnemyOnParent =
-                    pt.GetField("Enemy", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) ??
-                    pt.GetField("enemy", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            }
-            if (_fEnemyOnParent == null) return;
-
-            // Need a live Enemy instance to discover its type
-            if (_fCurrentState != null && _fHealthCurrent != null) return;
-
-            var enemy = _fEnemyOnParent.GetValue(parent);
-            if (enemy == null) return;
-
-            var et = enemy.GetType();
-
-            if (_fCurrentState == null)
-                _fCurrentState =
-                    et.GetField("CurrentState", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) ??
-                    et.GetField("currentState", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-            if (_fHealthOnEnemy == null)
-                _fHealthOnEnemy =
-                    et.GetField("Health", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) ??
-                    et.GetField("health", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-            if (_fHealthOnEnemy == null) return;
-
-            var health = _fHealthOnEnemy.GetValue(enemy);
-            if (health == null) return;
-
-            var ht = health.GetType();
-            if (_fHealthCurrent == null)
-                _fHealthCurrent = ht.GetField("healthCurrent",
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            if (_fHealthMax == null)
-                _fHealthMax = ht.GetField("health",
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-        }
-
+        // ─── Health / State ────────────────────────────────────────────────────
         private void TryGetHealth(out int current, out int max)
         {
             current = max = -1;
-            if (_enemyParent == null) return;
-
-            EnsureReflection(_enemyParent);
-            if (_fEnemyOnParent == null || _fHealthOnEnemy == null) return;
-
-            var enemy = _fEnemyOnParent.GetValue(_enemyParent);
-            if (enemy == null) return;
-
-            var health = _fHealthOnEnemy.GetValue(enemy);
+            if (_enemyParent == null || _enemyParent.Enemy == null) return;
+            var health = _enemyParent.Enemy.Health;
             if (health == null) return;
-
-            if (_fHealthCurrent != null)
-                current = (int)_fHealthCurrent.GetValue(health);
-            if (_fHealthMax != null)
-                max = (int)_fHealthMax.GetValue(health);
-        }
-
-        private string TryGetState()
-        {
-            if (_enemyParent == null) return null;
-
-            EnsureReflection(_enemyParent);
-            if (_fEnemyOnParent == null || _fCurrentState == null) return null;
-
-            var enemy = _fEnemyOnParent.GetValue(_enemyParent);
-            return enemy == null ? null : _fCurrentState.GetValue(enemy)?.ToString();
+            current = health.healthCurrent;
+            max = health.health;
         }
 
         // ─── UI helpers ──────────────────────────────────────────────────────────
         private Image MkImg(Transform parent, string name, Color color,
             float xMin, float xMax, float yMin, float yMax)
         {
-            var go  = new GameObject(name);
+            var go = new GameObject(name);
             go.transform.SetParent(parent, false);
-            var img    = go.AddComponent<Image>();
+            var img = go.AddComponent<Image>();
             img.sprite = GetSprite();
-            img.color  = color;
+            img.color = color;
             SetAnch(go.GetComponent<RectTransform>(), xMin, xMax, yMin, yMax);
             return img;
         }
 
         private Text MkText(Transform parent, string name, int fontSize, FontStyle style, Color color)
         {
-            var go   = new GameObject(name);
+            var go = new GameObject(name);
             go.transform.SetParent(parent, false);
-            var text          = go.AddComponent<Text>();
-            text.font         = GetFont();
-            text.fontSize     = fontSize;
-            text.fontStyle    = style;
-            text.color        = color;
+            var text = go.AddComponent<Text>();
+            text.font = GetFont();
+            text.fontSize = fontSize;
+            text.fontStyle = style;
+            text.color = color;
             text.raycastTarget = false;
             text.supportRichText = false;
             return text;

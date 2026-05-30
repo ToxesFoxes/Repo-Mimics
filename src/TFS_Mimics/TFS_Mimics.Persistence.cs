@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using BepInEx;
 using Photon.Pun;
 using Photon.Realtime;
@@ -332,11 +333,21 @@ namespace TFS_Mimics
                 return "unknown";
             }
 
+            // 1. Try steamID field on PlayerAvatar — this is how the game stores it.
+            //    The field is populated via AddToStatsManagerRPC on the local PlayerAvatar.
+            var steamId = TryGetSteamIdFromPlayerAvatar(player);
+            if (!string.IsNullOrWhiteSpace(steamId) && steamId != "0")
+            {
+                return steamId;
+            }
+
+            // 2. Photon UserId (set by some platforms)
             if (!string.IsNullOrWhiteSpace(player.UserId))
             {
                 return player.UserId;
             }
 
+            // 3. Custom properties fallback
             if (player.CustomProperties != null)
             {
                 var keys = new[] { "steamid", "steam_id", "SteamId", "SteamID", "playerId", "PlayerId" };
@@ -345,7 +356,7 @@ namespace TFS_Mimics
                     if (player.CustomProperties.TryGetValue(key, out var value) && value != null)
                     {
                         var text = value.ToString();
-                        if (!string.IsNullOrWhiteSpace(text))
+                        if (!string.IsNullOrWhiteSpace(text) && text != "0")
                         {
                             return text;
                         }
@@ -354,6 +365,41 @@ namespace TFS_Mimics
             }
 
             return $"actor_{player.ActorNumber}";
+        }
+
+        private static FieldInfo _steamIdField;
+
+        /// <summary>
+        /// Reads PlayerAvatar.steamID for the given Photon player by finding the
+        /// PlayerAvatar whose PhotonView.Owner matches.
+        /// </summary>
+        private static string TryGetSteamIdFromPlayerAvatar(Player player)
+        {
+            if (player == null) return null;
+
+            var avatars = UnityEngine.Object.FindObjectsByType<PlayerAvatar>(FindObjectsSortMode.None);
+            foreach (var avatar in avatars)
+            {
+                if (avatar == null) continue;
+
+                var pv = avatar.GetComponent<PhotonView>();
+                if (pv == null || pv.Owner == null) continue;
+                if (pv.Owner.ActorNumber != player.ActorNumber) continue;
+
+                // Cache the field info on first use
+                if (_steamIdField == null)
+                {
+                    _steamIdField = typeof(PlayerAvatar).GetField("steamID",
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                }
+
+                if (_steamIdField == null) return null;
+
+                var id = _steamIdField.GetValue(avatar) as string;
+                return string.IsNullOrWhiteSpace(id) ? null : id;
+            }
+
+            return null;
         }
 
         private static string GetPlayerDisplayName(Player player)

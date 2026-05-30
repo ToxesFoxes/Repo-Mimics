@@ -210,7 +210,8 @@ namespace TFS_Mimics
                 capturingSpeech = true;
                 bufferPosition = 0;
                 PrependPreSpeechToCapture();
-                postSpeechSamplesRemaining = Mathf.Max(1, (int)(sampleRate * SilenceMergeSeconds));
+                pendingSilenceSamples = 0;
+                postSpeechSamplesRemaining = 0;
                 var localPlayer = PhotonNetwork.LocalPlayer;
                 var localPlayerId = GetPlayerPersistentId(localPlayer);
                 var localPlayerName = GetPlayerDisplayName(localPlayer);
@@ -226,27 +227,15 @@ namespace TFS_Mimics
             var copyCount = 0;
             if (isTalking)
             {
-                if (pendingSilenceSamples > 0)
-                {
-                    var bridgeMaxSamples = Mathf.Max(1, (int)(sampleRate * MergeSilenceBridgeSeconds));
-                    var bridgeSamples = Mathf.Min(pendingSilenceSamples, bridgeMaxSamples);
-                    AppendSilenceToCapture(bridgeSamples);
-                    pendingSilenceSamples = 0;
-                }
-
+                pendingSilenceSamples = 0;
                 copyCount = AppendVoiceDataToCapture(voiceData);
-                postSpeechSamplesRemaining = Mathf.Max(1, (int)(sampleRate * SilenceMergeSeconds));
             }
             else
             {
-                pendingSilenceSamples = Mathf.Min(
-                    pendingSilenceSamples + voiceData.Length,
-                    Mathf.Max(1, (int)(sampleRate * SilenceMergeSeconds))
-                );
-                postSpeechSamplesRemaining -= voiceData.Length;
-                if (postSpeechSamplesRemaining <= 0 && bufferPosition > sampleRate / 4 && !fileSaved)
+                // Finalize immediately once VAD hold has expired — no post-speech merge window.
+                if (bufferPosition > sampleRate / 4 && !fileSaved)
                 {
-                    DLog($"Speech ended after smart silence-merge window: finalize bufferedSamples={bufferPosition} mergeSilenceSec={SilenceMergeSeconds:F1} bridgeSec={MergeSilenceBridgeSeconds:F1} {DebugContext()}");
+                    DLog($"Speech ended (VAD hold expired): finalize bufferedSamples={bufferPosition} {DebugContext()}");
                     FinalizeCaptureAndSend(bufferPosition);
                     return;
                 }

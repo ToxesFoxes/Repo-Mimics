@@ -60,6 +60,13 @@ namespace TFS_Mimics
 
         private static readonly ManualLogSource Log = BepInEx.Logging.Logger.CreateLogSource("TFS_Mimics");
 
+        /// <summary>
+        /// The active local-player <see cref="TFS_Mimics"/> instance.
+        /// Used by <see cref="MimicsAPI"/> to immediately apply clips that are registered
+        /// after the component has already started.
+        /// </summary>
+        internal static TFS_Mimics Instance { get; private set; }
+
         public PhotonView photonView;
 
         private PlayerVoiceChat playerVoiceChat;
@@ -167,8 +174,16 @@ namespace TFS_Mimics
             LogPlayerRecordingSummaryForWorldEntry();
         }
 
+        private void OnDestroy()
+        {
+            if (Instance == this)
+                Instance = null;
+        }
+
         private void Awake()
         {
+            Instance = this;
+
             photonView = GetComponent<PhotonView>();
             if (photonView == null)
             {

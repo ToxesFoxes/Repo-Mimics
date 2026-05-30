@@ -24,6 +24,7 @@ namespace TFS_Mimics
         public static ConfigEntry<int> configSamplingRate;
         public static ConfigEntry<bool> configPersistAudioCache;
         public static ConfigEntry<int> configPersistMaxFilesPerPlayer;
+        public static ConfigEntry<int> configNormalizeTarget;
 
         public static readonly Dictionary<string, ConfigEntry<bool>> enemyConfigEntries = new Dictionary<string, ConfigEntry<bool>>();
 
@@ -40,6 +41,7 @@ namespace TFS_Mimics
             configPlaybackVoiceFilterEnabled = Config.Bind("General", "Playback Voice Filters Enabled", true, "If false, playback never applies pitch/alien voice filters.");
             configPersistAudioCache = Config.Bind("General", "Persist Audio Cache", false, "If true, received mimic audio clips are saved to disk and loaded on world entry.");
             configPersistMaxFilesPerPlayer = Config.Bind("General", "Persist Max Files Per Player", 100, new ConfigDescription("Maximum number of persisted recordings to keep per player folder.", new AcceptableValueRange<int>(1, 5000), Array.Empty<object>()));
+            configNormalizeTarget = Config.Bind("General", "Normalize Target", 85, new ConfigDescription("Peak normalization target for voice and custom audio (0 = off, 100 = 0 dBFS).", new AcceptableValueRange<int>(0, 100), Array.Empty<object>()));
             configDebugVerbose = Config.Bind("Debug", "Verbose Logging", false, "Enable very detailed debug logs for the whole mimic pipeline.");
             configSamplingRate = Config.Bind("Experimental", "Sampling Rate", 48000, new ConfigDescription("Microphone/sample rate.", new AcceptableValueRange<int>(16000, 48000), Array.Empty<object>()));
             configFilterEnabled = Config.Bind("Filter", "Filter Enabled?", false, "Enable per-enemy mimic filter.");

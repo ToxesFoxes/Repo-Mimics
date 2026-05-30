@@ -37,6 +37,7 @@ namespace TFS_Mimics
         private string _settingMaxDelayBuf;
         private string _settingMaxFilesBuf;
         private string _settingSamplingRateBuf;
+        private string _settingNormalizeBuf;
         private bool _settingsDirty;
         private Vector2 _scrollSettings;
 
@@ -1114,6 +1115,7 @@ namespace TFS_Mimics
             if (_settingMaxDelayBuf == null) _settingMaxDelayBuf = (Plugin.configMaxDelay?.Value ?? 15).ToString();
             if (_settingMaxFilesBuf == null) _settingMaxFilesBuf = (Plugin.configPersistMaxFilesPerPlayer?.Value ?? 100).ToString();
             if (_settingSamplingRateBuf == null) _settingSamplingRateBuf = (Plugin.configSamplingRate?.Value ?? 48000).ToString();
+            if (_settingNormalizeBuf == null) _settingNormalizeBuf = (Plugin.configNormalizeTarget?.Value ?? 85).ToString();
 
             _scrollSettings = GUILayout.BeginScrollView(_scrollSettings, GUILayout.Height(scrollH));
 
@@ -1134,6 +1136,9 @@ namespace TFS_Mimics
 
             DrawSettingToggle("Hear Yourself", Plugin.configHearYourself);
             DrawSettingToggle("Playback Voice Filter", Plugin.configPlaybackVoiceFilterEnabled);
+
+            DrawSettingSliderInt("Normalize Target", ref _settingNormalizeBuf,
+                Plugin.configNormalizeTarget, 0, 100, "% (0=off)");
 
             GUILayout.Space(4f);
 

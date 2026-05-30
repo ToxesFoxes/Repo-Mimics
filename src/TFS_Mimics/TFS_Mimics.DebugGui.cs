@@ -131,17 +131,17 @@ namespace TFS_Mimics
 
         private void DebugGuiUpdate()
         {
-            if (Input.GetKeyDown(KeyCode.End))
+            if (Input.GetKeyDown(KeyCode.F8))
             {
                 var shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
                 if (shift && _debugWindowOpen)
                 {
-                    // Shift+End — снять фокус (вернуть курсор игре), окно остаётся видимым
+                    // Shift+F8 — снять фокус (вернуть курсор игре), окно остаётся видимым
                     _debugWindowFocused = false;
                 }
                 else
                 {
-                    // End — переключить окно
+                    // F8 — переключить окно
                     _debugWindowOpen = !_debugWindowOpen;
                     _debugWindowFocused = _debugWindowOpen;
                     if (_debugWindowOpen)

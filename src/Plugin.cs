@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
@@ -50,6 +51,41 @@ namespace TFS_Mimics
             harmony.PatchAll();
 
             patches.EnemyDirectorStartPatch.Initialize(Config);
+
+            EnsureDataFolders();
+        }
+
+        private void EnsureDataFolders()
+        {
+            var root = Path.Combine(BepInEx.Paths.BepInExRootPath, "plugins", "ToxesFoxes-Mimics");
+
+            // audio-cache — created silently, the mod writes there automatically
+            var cacheDir = Path.Combine(root, "audio-cache");
+            Directory.CreateDirectory(cacheDir);
+
+            // custom-audio — created with a README placeholder so users know what to do
+            var customDir = Path.Combine(root, "custom-audio");
+            Directory.CreateDirectory(customDir);
+
+            var readmePath = Path.Combine(customDir, "HOW TO USE.txt");
+            if (!File.Exists(readmePath))
+            {
+                File.WriteAllText(readmePath,
+                    "=== Mimics — Custom Audio ===\r\n\r\n" +
+                    "Drop .mp3 or .wav files into this folder.\r\n" +
+                    "They will be loaded automatically when you join a level.\r\n\r\n" +
+                    "Custom clips are played through nearby enemies just like recorded\r\n" +
+                    "player voices, but without any online-player restriction.\r\n\r\n" +
+                    "Tips:\r\n" +
+                    "  - Mono or stereo files both work.\r\n" +
+                    "  - Volume is normalized automatically (configurable in Settings tab).\r\n" +
+                    "  - Use the 'Reload Custom' button in the Debug HUD (Cache tab) to\r\n" +
+                    "    reload files without restarting the game.\r\n" +
+                    "  - This file (HOW TO USE.txt) is ignored by the mod.\r\n"
+                );
+            }
+
+            PluginLogger.LogInfo($"[Mimics] Data folders ready: {root}");
         }
     }
 }

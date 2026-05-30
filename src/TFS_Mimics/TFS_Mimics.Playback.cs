@@ -219,8 +219,7 @@ namespace TFS_Mimics
             }
 
             sourceComponent.clip = clip;
-            // configVoiceVolume is int 0-20 → map to 0.0-1.0
-            sourceComponent.volume = Mathf.Clamp01(Plugin.configVoiceVolume.Value / 20f);
+            sourceComponent.volume = GetVolumeForPlayer(sourcePlayerId);
             sourceComponent.mute = false;
             sourceComponent.pitch = 1f;
             sourceComponent.loop = false;

@@ -239,7 +239,86 @@ namespace TFS_Mimics
 
         private void LoadPlayersIndexFromDisk()
         {
-            // Index is rebuilt from persisted audio headers on load.
+            // Read volumeOverride values from players.json (written by SavePlayersIndexToDisk).
+            // The rest of the index (names, clipCount) is rebuilt from audio headers on load.
+            var path = GetPlayersIndexPath();
+            if (!File.Exists(path)) return;
+
+            try
+            {
+                var text = File.ReadAllText(path);
+                // Simple manual parse: find each "id"/"volumeOverride" pair
+                // (avoids a JSON library dependency).
+                var entries = ParsePlayersJson(text);
+                foreach (var e in entries)
+                {
+                    if (!string.IsNullOrWhiteSpace(e.id) && e.volumeOverride >= 0)
+                        playerVolumeOverrides[e.id] = e.volumeOverride;
+                }
+                DLog($"LoadPlayersIndexFromDisk: loaded volumeOverrides for {entries.Count} player(s)");
+            }
+            catch (Exception ex)
+            {
+                Log.LogWarning($"Failed to load players index: {ex.Message}");
+            }
+        }
+
+        private sealed class PlayerJsonEntry
+        {
+            public string id;
+            public string name;
+            public int    volumeOverride = -1;  // -1 = unset
+        }
+
+        private static List<PlayerJsonEntry> ParsePlayersJson(string json)
+        {
+            var result = new List<PlayerJsonEntry>();
+            if (string.IsNullOrWhiteSpace(json)) return result;
+
+            // Walk through objects between { } inside "players" array.
+            var i = 0;
+            while (i < json.Length)
+            {
+                var ob = json.IndexOf('{', i);
+                if (ob < 0) break;
+                var cb = json.IndexOf('}', ob);
+                if (cb < 0) break;
+                var obj = json.Substring(ob + 1, cb - ob - 1);
+                var entry = new PlayerJsonEntry();
+                entry.id             = ExtractJsonString(obj, "id");
+                entry.name           = ExtractJsonString(obj, "name");
+                var volStr           = ExtractJsonString(obj, "volumeOverride");
+                if (int.TryParse(volStr, out var vol)) entry.volumeOverride = vol;
+                if (!string.IsNullOrWhiteSpace(entry.id))
+                    result.Add(entry);
+                i = cb + 1;
+            }
+            return result;
+        }
+
+        private static string ExtractJsonString(string obj, string key)
+        {
+            // Matches both "key": "value" and "key": 123
+            var search = $"\"{key}\"";
+            var ki = obj.IndexOf(search, StringComparison.OrdinalIgnoreCase);
+            if (ki < 0) return string.Empty;
+            var colon = obj.IndexOf(':', ki + search.Length);
+            if (colon < 0) return string.Empty;
+            var rest = obj.Substring(colon + 1).TrimStart();
+            if (rest.Length == 0) return string.Empty;
+            if (rest[0] == '"')
+            {
+                // string value
+                var end = rest.IndexOf('"', 1);
+                return end < 0 ? string.Empty : rest.Substring(1, end - 1);
+            }
+            else
+            {
+                // numeric / bool value
+                var end = 0;
+                while (end < rest.Length && rest[end] != ',' && rest[end] != '}' && rest[end] != '\n') end++;
+                return rest.Substring(0, end).Trim();
+            }
         }
 
         private void SavePlayersIndexToDisk()
@@ -248,6 +327,15 @@ namespace TFS_Mimics
             {
                 var dir = GetAudioCacheDirectoryPath();
                 Directory.CreateDirectory(dir);
+
+                // Build clip-count map from cachedAudio
+                var clipCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var e in cachedAudio)
+                {
+                    if (e == null) continue;
+                    var pid = !string.IsNullOrWhiteSpace(e.SourcePlayerId) ? e.SourcePlayerId : $"actor_{e.SourceActor}";
+                    clipCounts[pid] = clipCounts.TryGetValue(pid, out var c) ? c + 1 : 1;
+                }
 
                 var ordered = playerNameById.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase).ToList();
                 var sb = new System.Text.StringBuilder();
@@ -258,8 +346,10 @@ namespace TFS_Mimics
                     var kv = ordered[i];
                     var id = EscapeJsonString(kv.Key);
                     var name = EscapeJsonString(string.IsNullOrWhiteSpace(kv.Value) ? "unknown" : kv.Value);
+                    clipCounts.TryGetValue(kv.Key, out var clips);
+                    playerVolumeOverrides.TryGetValue(kv.Key, out var volOv);
                     var suffix = i < ordered.Count - 1 ? "," : string.Empty;
-                    sb.AppendLine($"    {{ \"id\": \"{id}\", \"name\": \"{name}\" }}{suffix}");
+                    sb.AppendLine($"    {{ \"id\": \"{id}\", \"name\": \"{name}\", \"clipCount\": {clips}, \"volumeOverride\": {volOv} }}{suffix}");
                 }
 
                 sb.AppendLine("  ]");
@@ -435,6 +525,20 @@ namespace TFS_Mimics
             }
 
             return ids;
+        }
+
+        /// <summary>
+        /// Returns the effective Unity AudioSource volume (0.0–1.0) for a given player.
+        /// Uses the per-player override if set, otherwise falls back to configVoiceVolume.
+        /// </summary>
+        private float GetVolumeForPlayer(string playerId)
+        {
+            if (!string.IsNullOrWhiteSpace(playerId) &&
+                playerVolumeOverrides.TryGetValue(playerId, out var ov) && ov >= 0)
+            {
+                return Mathf.Clamp01(ov / 100f);
+            }
+            return Mathf.Clamp01((Plugin.configVoiceVolume?.Value ?? 20) / 100f);
         }
 
         private void LogPlayerRecordingSummaryForWorldEntry()

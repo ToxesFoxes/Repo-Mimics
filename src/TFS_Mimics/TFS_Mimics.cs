@@ -102,6 +102,9 @@ namespace TFS_Mimics
         private bool persistenceInitialized;
         private readonly HashSet<string> loadedPersistedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> playerNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // Per-player volume overrides: 0-100 (maps same way as configVoiceVolume).
+        // -1 means "use global volume". Persisted in players.json.
+        private readonly Dictionary<string, int> playerVolumeOverrides = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         private const float IncomingTransmissionTimeoutSeconds = 30f;
 
         private string DebugContext()

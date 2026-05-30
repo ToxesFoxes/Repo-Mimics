@@ -195,12 +195,8 @@ namespace TFS_Mimics
             DLog($"PlayCustomAudioEntry: playing '{entry.FileName}' length={entry.Clip.length:F1}s on '{selected.EnemyName}' dist={selected.Distance:F1} {DebugContext()}");
         }
         // ─── Normalization ────────────────────────────────────────────────────────
-        private const float NormalizeTarget = 0.85f;   // peak target: leaves 15% headroom
-
         /// <summary>
-        /// Peak-normalises an AudioClip in-place so custom files always play at a
-        /// consistent loudness regardless of how loudly they were mastered.
-        /// Works across all channels (stereo / mono).
+        /// Reads all samples from the clip, runs shared peak-normalization, then writes back.
         /// </summary>
         private static void NormalizeClip(AudioClip clip)
         {
@@ -209,24 +205,7 @@ namespace TFS_Mimics
             var samples = new float[clip.samples * clip.channels];
             if (!clip.GetData(samples, 0)) return;
 
-            // Find peak absolute value
-            var peak = 0f;
-            for (var i = 0; i < samples.Length; i++)
-            {
-                var abs = Mathf.Abs(samples[i]);
-                if (abs > peak) peak = abs;
-            }
-
-            // Skip silent or already-near-zero clips
-            if (peak < 0.0001f) return;
-
-            var scale = NormalizeTarget / peak;
-
-            // Already loud enough — don't amplify if it would exceed target
-            if (scale >= 1f && peak >= NormalizeTarget) return;
-
-            for (var i = 0; i < samples.Length; i++)
-                samples[i] *= scale;
+            NormalizeSamples(samples);
 
             clip.SetData(samples, 0);
         }

@@ -101,6 +101,8 @@ namespace TFS_Mimics
                 }
             }
 
+            NormalizeSamples(samples);
+
             var output = new float[samples.Length + silencePadding * 2];
             for (var i = 0; i < samples.Length; i++)
             {
@@ -190,6 +192,33 @@ namespace TFS_Mimics
             }
 
             return output;
+        }
+
+        private const float NormalizeTarget = 0.85f;   // peak target, 15% headroom
+
+        /// <summary>
+        /// Peak-normalises a float sample array in-place.
+        /// Scales so the loudest sample reaches NormalizeTarget.
+        /// Does nothing if the clip is silent or already at/above target.
+        /// </summary>
+        internal static void NormalizeSamples(float[] samples)
+        {
+            if (samples == null || samples.Length == 0) return;
+
+            var peak = 0f;
+            for (var i = 0; i < samples.Length; i++)
+            {
+                var abs = Mathf.Abs(samples[i]);
+                if (abs > peak) peak = abs;
+            }
+
+            if (peak < 0.0001f) return;   // silent
+
+            var scale = NormalizeTarget / peak;
+            if (scale >= 1f && peak >= NormalizeTarget) return;  // don't over-amplify
+
+            for (var i = 0; i < samples.Length; i++)
+                samples[i] *= scale;
         }
 
         // Writes a WAV file to audio-cache/debug/ when verbose logging is active.

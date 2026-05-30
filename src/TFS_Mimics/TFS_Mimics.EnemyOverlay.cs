@@ -9,10 +9,12 @@ namespace TFS_Mimics
     /// </summary>
     internal static class OverlaySettings
     {
+        public static bool ShowName = true;
         public static bool ShowHp = true;
         public static bool ShowState = true;
         public static bool ShowDistance = true;
         public static bool ShowPlaying = true;
+        public static bool ShowAudioMarker = true;
     }
 
     /// <summary>
@@ -209,9 +211,16 @@ namespace TFS_Mimics
             if (_enemyParent == null) return;
 
             // Name
-            var n = _enemyParent.enemyName;
-            if (string.IsNullOrWhiteSpace(n)) n = _enemyParent.gameObject.name;
-            if (_nameText != null) _nameText.text = n;
+            if (_nameText != null)
+            {
+                _nameText.gameObject.SetActive(OverlaySettings.ShowName);
+                if (OverlaySettings.ShowName)
+                {
+                    var n = _enemyParent.enemyName;
+                    if (string.IsNullOrWhiteSpace(n)) n = _enemyParent.gameObject.name;
+                    _nameText.text = n;
+                }
+            }
 
             // HP
             TryGetHealth(out var hpCur, out var hpMax);
@@ -270,6 +279,14 @@ namespace TFS_Mimics
                 var show = OverlaySettings.ShowPlaying && IsPlayingAudio;
                 _playingBg.color = show ? new Color(CGreen.r, CGreen.g, CGreen.b, 0.18f) : new Color(0f, 0f, 0f, 0f);
                 _playingText.color = show ? CGreen : new Color(0f, 0f, 0f, 0f);
+            }
+            // Auto-hide entire canvas when no sections are enabled
+            if (_canvas != null)
+            {
+                var anyVisible = OverlaySettings.ShowName || OverlaySettings.ShowHp
+                              || OverlaySettings.ShowState || OverlaySettings.ShowDistance
+                              || OverlaySettings.ShowPlaying;
+                _canvas.gameObject.SetActive(anyVisible);
             }
         }
 

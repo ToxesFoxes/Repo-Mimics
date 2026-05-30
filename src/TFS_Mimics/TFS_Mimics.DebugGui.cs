@@ -332,6 +332,7 @@ namespace TFS_Mimics
                     marker.Init(src);
                     _audioMarkers[id] = marker;
                 }
+                marker.SetVisible(OverlaySettings.ShowAudioMarker);
             }
 
             var toRemoveA = new List<int>();
@@ -1917,10 +1918,20 @@ namespace TFS_Mimics
             // ── Visible sections ───────────────────────────────────────────────
             DrawSettingsSection("Visible Sections");
 
+            DrawOverlayToggle("Mob Name", ref OverlaySettings.ShowName);
             DrawOverlayToggle("HP Bar", ref OverlaySettings.ShowHp);
             DrawOverlayToggle("AI State", ref OverlaySettings.ShowState);
             DrawOverlayToggle("Distance", ref OverlaySettings.ShowDistance);
             DrawOverlayToggle("Playing Indicator", ref OverlaySettings.ShowPlaying);
+            GUILayout.Space(6f);
+
+            // ── Audio Source Marker ────────────────────────────────────────────
+            DrawSettingsSection("Audio Source Marker");
+
+            DrawOverlayToggle("Show Audio Marker", ref OverlaySettings.ShowAudioMarker);
+            GUI.color = CTextDim;
+            GUILayout.Label("  \u266b billboard at the exact AudioSource position on each mob.", _gsSmall);
+            GUI.color = Color.white;
 
             GUILayout.Space(8f);
             GUILayout.EndScrollView();

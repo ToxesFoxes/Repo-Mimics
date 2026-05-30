@@ -352,6 +352,7 @@ namespace TFS_Mimics
 
             Log.LogInfo($"Finished sending audio to players [{localPlayerName}]({localPlayerId}) tx={transmissionId} chunksSent={chunks.Count} target={target} {DebugContext()}");
             DLog($"SendAudioInChunks complete: chunksSent={chunks.Count} {DebugContext()}");
+            PushVoiceLog(false, transmissionId, localPlayerId, localPlayerName, audioData.Length, true);
         }
     }
 }

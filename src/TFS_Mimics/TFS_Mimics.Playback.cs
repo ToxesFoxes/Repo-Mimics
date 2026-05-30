@@ -95,6 +95,7 @@ namespace TFS_Mimics
 
             DLog($"ReceiveAudioChunk: complete tx={tx} totalBytes={audioData.Length} source={entry.SourceActor}:{entry.SourceName} playerId={entry.SourcePlayerId} cachedTotal={cachedAudio.Count} {DebugContext()}");
             incomingAudioTransmissions.Remove(key);
+            PushVoiceLog(true, tx, entry.SourcePlayerId, entry.SourceName, audioData.Length, true);
         }
 
         private void CleanupStaleIncomingTransmissions()

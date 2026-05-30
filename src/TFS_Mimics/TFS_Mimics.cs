@@ -91,7 +91,6 @@ namespace TFS_Mimics
         private string currentPlaybackEnemyName = "None";
         private string currentPlaybackSourcePlayerId = "None";
         private float currentPlaybackEndsAt;
-        private GUIStyle hudTextStyle;
         private readonly List<string> nearestPlaybackTargetsHud = new List<string>();
         private readonly List<HudPlaybackCandidate> nearestPlaybackCandidatesHud = new List<HudPlaybackCandidate>();
         private Vector3 hudLastSelectedEnemyPos;
@@ -124,91 +123,9 @@ namespace TFS_Mimics
             }
         }
 
-        private static string FitHudText(string value, int maxChars)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return "None";
-            }
-
-            return value.Length <= maxChars ? value : value.Substring(0, maxChars - 3) + "...";
-        }
-
         private static string FormatHudVector(Vector3 value)
         {
             return $"({value.x:F1}, {value.y:F1}, {value.z:F1})";
-        }
-
-        private void OnGUI()
-        {
-            if (Plugin.configDebugVerbose == null || !Plugin.configDebugVerbose.Value)
-            {
-                return;
-            }
-
-            if (photonView == null || !photonView.IsMine || !SemiFunc.RunIsLevel())
-            {
-                return;
-            }
-
-            hudTextStyle ??= new GUIStyle(GUI.skin.label)
-                {
-                    alignment = TextAnchor.UpperLeft,
-                    fontSize = 10,
-                    wordWrap = false,
-                    normal =
-                    {
-                        textColor = Color.white
-                    }
-                };
-
-            var activePlaybackName = Time.time <= currentPlaybackEndsAt ? currentPlaybackEnemyName : "None";
-            var activePlaybackSourcePlayerId = Time.time <= currentPlaybackEndsAt ? currentPlaybackSourcePlayerId : "None";
-            var targetLines = nearestPlaybackTargetsHud.Count > 0 ? nearestPlaybackTargetsHud : new List<string> { "No candidates" };
-            var localNick = PhotonNetwork.LocalPlayer != null && !string.IsNullOrWhiteSpace(PhotonNetwork.LocalPlayer.NickName)
-                ? PhotonNetwork.LocalPlayer.NickName
-                : "Unknown";
-            var recordingDurationSec = sampleRate > 0 ? bufferPosition / (float)sampleRate : 0f;
-            var recordingStatus = capturingSpeech
-                ? $"Recording now: {localNick} ({recordingDurationSec:F1}s)"
-                : "Recording now: None";
-            var lines = new List<string>
-            {
-                $"Sounds Cached: {cachedAudio.Count}",
-                $"Current Sound Enemy: {activePlaybackName}",
-                $"Current Sound Source PlayerId: {activePlaybackSourcePlayerId}",
-                $"Player Pos: {FormatHudVector(transform.position)}",
-                $"Selected Enemy Pos: {(hudHasSelectedEnemyPos ? FormatHudVector(hudLastSelectedEnemyPos) : "None")}",
-                "Nearest Playback Targets:"
-            };
-            lines.AddRange(targetLines);
-            lines.Add(string.Empty);
-            lines.Add(recordingStatus);
-
-            var maxLineWidth = 260f;
-            foreach (var line in lines)
-            {
-                var width = hudTextStyle.CalcSize(new GUIContent(line)).x;
-                if (width > maxLineWidth)
-                {
-                    maxLineWidth = width;
-                }
-            }
-
-            var panelWidth = Mathf.Clamp(maxLineWidth + 24f, 320f, 920f);
-            var lineHeight = 17f;
-            var panelHeight = 30f + lines.Count * lineHeight + 8f;
-            var rect = new Rect(Screen.width - panelWidth - 16f, 16f, panelWidth, panelHeight);
-            GUI.Box(rect, "Mimics Monitor");
-
-            for (var i = 0; i < lines.Count; i++)
-            {
-                GUI.Label(
-                    new Rect(rect.x + 10f, rect.y + 24f + i * lineHeight, rect.width - 20f, lineHeight),
-                    lines[i],
-                    hudTextStyle
-                );
-            }
         }
 
         private void Update()
@@ -227,6 +144,12 @@ namespace TFS_Mimics
             {
                 wasInLevel = false;
                 persistenceInitialized = false;
+                _debugWindowOpen = false;
+                _fpmOpen = false;
+                _debugWindowFocused = true;
+                _showGizmos = false;
+                DestroyAllOverlays();
+                SetCursorForGui(false);
             }
 
             if (!inLevel)
@@ -234,18 +157,7 @@ namespace TFS_Mimics
                 return;
             }
 
-            if (Plugin.configDebugVerbose == null || !Plugin.configDebugVerbose.Value)
-            {
-                return;
-            }
-
-            if (Time.time < hudNextRefreshAt)
-            {
-                return;
-            }
-
-            hudNextRefreshAt = Time.time + 0.25f;
-            RefreshHudTargetsSnapshot();
+            DebugGuiUpdate();
         }
 
         private void OnEnteredLevel()

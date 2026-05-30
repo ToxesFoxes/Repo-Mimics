@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Configuration;
@@ -138,8 +139,8 @@ namespace TFS_Mimics
                 var shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
                 if (shift && _debugWindowOpen)
                 {
-                    // Shift+F8 — снять фокус (вернуть курсор игре), окно остаётся видимым
-                    _debugWindowFocused = false;
+                    // Shift+F8 — переключить фокус (вернуть курсор игре), окно остаётся видимым
+                    _debugWindowFocused = !_debugWindowFocused;
                 }
                 else
                 {

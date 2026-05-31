@@ -10,7 +10,7 @@ using RepoSteamNetworking.API;
 namespace TFS_Mimics
 {
     [BepInPlugin("TFS_Mimics", "TFS_Mimics", "1.0.3")]
-    [BepInDependency("Rune580.Mods.Repo.RepoSteamNetworking")]
+    [BepInDependency("com.rune580.reposteamnetworking")]
     public class Plugin : BaseUnityPlugin
     {
         internal static ManualLogSource PluginLogger;

@@ -281,7 +281,7 @@ namespace TFS_Mimics
             DrawTabRow();
             GUILayout.Space(4f);
 
-            var scrollH = Mathf.Max(100f, _debugWindowRect.height - 228f);
+            var scrollH = Mathf.Max(100f, _debugWindowRect.height - 168f);
             switch (_debugTab)
             {
                 case 0: DrawNearestMobsTab(scrollH); break;

@@ -80,9 +80,16 @@ namespace TFS_Mimics
         private int postSpeechSamplesRemaining;
         private int pendingSilenceSamples;
         private const int RecordingBufferSeconds = 30;
+        // Max bytes sent per transmission — keeps chunk count ≤32 and prevents Photon SendBufferFull (-11).
+        // 32 chunks × 8192 bytes = 256 KB ≈ 2.7 s at 48 kHz 16-bit mono.
+        private const int MaxSendBytes = 262144;
+        // Max queued transmissions. Oldest entry is dropped when the limit is exceeded.
+        private const int MaxSendQueueDepth = 3;
         private bool isRecording;
         private bool capturingSpeech;
         private bool fileSaved;
+        private bool _isSendingAudio;
+        private readonly Queue<byte[]> _sendQueue = new Queue<byte[]>();
         private float vadHoldUntil;
 
         private Dictionary<string, bool> filter;

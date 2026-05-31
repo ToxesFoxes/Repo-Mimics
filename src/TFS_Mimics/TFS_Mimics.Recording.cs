@@ -277,7 +277,20 @@ namespace TFS_Mimics
             Log.LogInfo($"Finished recording player [{localPlayerName}]({localPlayerId}) duration={durationSec:F2}s bytes={audioBytes.Length} {DebugContext()}");
             DLog($"FinalizeCaptureAndSend: usedSamples={usedSamples} bytes={audioBytes.Length} {DebugContext()}");
             // TryWriteDebugWav("rec", audioBytes, sampleRate);
-            StartCoroutine(SendAudioInChunks(audioBytes));
+            if (_isSendingAudio)
+            {
+                if (_sendQueue.Count >= MaxSendQueueDepth)
+                {
+                    var dropped = _sendQueue.Dequeue();
+                    Log.LogWarning($"SendQueue full (depth={MaxSendQueueDepth}): dropped oldest entry ({dropped.Length} bytes) {DebugContext()}");
+                }
+                _sendQueue.Enqueue(audioBytes);
+                Log.LogInfo($"SendQueue: enqueued {audioBytes.Length} bytes (queued={_sendQueue.Count}) {DebugContext()}");
+            }
+            else
+            {
+                StartCoroutine(SendAudioInChunks(audioBytes));
+            }
             StartRecording();
         }
 
@@ -305,6 +318,15 @@ namespace TFS_Mimics
 
         private IEnumerator SendAudioInChunks(byte[] audioData)
         {
+            if (audioData.Length > MaxSendBytes)
+            {
+                Log.LogWarning($"SendAudioInChunks: payload {audioData.Length} bytes exceeds MaxSendBytes={MaxSendBytes}, truncating to prevent Photon buffer overflow {DebugContext()}");
+                var truncated = new byte[MaxSendBytes];
+                Array.Copy(audioData, truncated, MaxSendBytes);
+                audioData = truncated;
+            }
+
+            _isSendingAudio = true;
             var chunks = ChunkAudioData(audioData, 8192);
             var transmissionId = Guid.NewGuid().ToString("N");
             var localPlayer = PhotonNetwork.LocalPlayer;
@@ -320,6 +342,7 @@ namespace TFS_Mimics
                 {
                     Log.LogWarning($"Photon disconnected during send at chunk={i}/{chunks.Count} {DebugContext()}");
                     PushVoiceLog(false, transmissionId, localPlayerId, localPlayerName, audioData.Length, false, i, chunks.Count, isFailed: true);
+                    _isSendingAudio = false;
                     yield break;
                 }
 
@@ -347,6 +370,14 @@ namespace TFS_Mimics
             Log.LogInfo($"Finished sending audio to players [{localPlayerName}]({localPlayerId}) tx={transmissionId} chunksSent={chunks.Count} target={target} {DebugContext()}");
             DLog($"SendAudioInChunks complete: chunksSent={chunks.Count} {DebugContext()}");
             PushVoiceLog(false, transmissionId, localPlayerId, localPlayerName, audioData.Length, true, chunks.Count, chunks.Count);
+            _isSendingAudio = false;
+
+            if (_sendQueue.Count > 0)
+            {
+                var next = _sendQueue.Dequeue();
+                Log.LogInfo($"SendQueue: starting next transmission ({next.Length} bytes, remaining={_sendQueue.Count}) {DebugContext()}");
+                StartCoroutine(SendAudioInChunks(next));
+            }
         }
     }
 }

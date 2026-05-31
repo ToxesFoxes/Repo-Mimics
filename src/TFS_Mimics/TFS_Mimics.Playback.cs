@@ -70,6 +70,9 @@ namespace TFS_Mimics
             transmission.Chunks[chunkIndex] = chunk;
             DLog($"ReceiveAudioChunk: got tx={tx} chunk={chunkIndex + 1}/{transmission.ExpectedChunkCount} bytes={chunk.Length} sender={senderActor}:{senderName} playerId={senderPlayerId} {DebugContext()}");
 
+            var chunksDone = transmission.Chunks.Count(c => c != null);
+            PushVoiceLog(true, tx, senderPlayerId, senderName, 0, false, chunksDone, transmission.ExpectedChunkCount);
+
             if (transmission.Chunks.Any(c => c == null))
             {
                 return;
@@ -95,7 +98,7 @@ namespace TFS_Mimics
 
             DLog($"ReceiveAudioChunk: complete tx={tx} totalBytes={audioData.Length} source={entry.SourceActor}:{entry.SourceName} playerId={entry.SourcePlayerId} cachedTotal={cachedAudio.Count} {DebugContext()}");
             incomingAudioTransmissions.Remove(key);
-            PushVoiceLog(true, tx, entry.SourcePlayerId, entry.SourceName, audioData.Length, true);
+            PushVoiceLog(true, tx, entry.SourcePlayerId, entry.SourceName, audioData.Length, true, transmission.ExpectedChunkCount, transmission.ExpectedChunkCount);
         }
 
         private void CleanupStaleIncomingTransmissions()

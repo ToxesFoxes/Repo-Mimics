@@ -303,7 +303,8 @@ namespace TFS_Mimics
             return (float)Math.Sqrt(sumSq / samples.Length);
         }
 
-        private IEnumerator SendAudioInChunks(byte[] audioData)        {
+        private IEnumerator SendAudioInChunks(byte[] audioData)
+        {
             var chunks = ChunkAudioData(audioData, 8192);
             var transmissionId = Guid.NewGuid().ToString("N");
             var localPlayer = PhotonNetwork.LocalPlayer;
@@ -336,12 +337,14 @@ namespace TFS_Mimics
 
                 DLog($"RPC sent: tx={transmissionId} chunk={i + 1}/{chunks.Count} bytes={chunks[i].Length} target={target} applyVoiceFilter={applyVoiceFilter} senderSampleRate={sampleRate} {DebugContext()}");
 
+                PushVoiceLog(false, transmissionId, localPlayerId, localPlayerName, audioData.Length, false, i + 1, chunks.Count);
+
                 yield return new WaitForSeconds(0.125f);
             }
 
             Log.LogInfo($"Finished sending audio to players [{localPlayerName}]({localPlayerId}) tx={transmissionId} chunksSent={chunks.Count} target={target} {DebugContext()}");
             DLog($"SendAudioInChunks complete: chunksSent={chunks.Count} {DebugContext()}");
-            PushVoiceLog(false, transmissionId, localPlayerId, localPlayerName, audioData.Length, true);
+            PushVoiceLog(false, transmissionId, localPlayerId, localPlayerName, audioData.Length, true, chunks.Count, chunks.Count);
         }
     }
 }

@@ -13,7 +13,7 @@ namespace TFS_Mimics
         private bool _showGizmos;
         private Rect _debugWindowRect = new Rect(20f, 20f, 520f, 500f);
         private int _debugTab;
-        private Vector2 _scrollMobs, _scrollPlayers, _scrollCache, _scrollVoiceLog, _scrollOverlays;
+        private Vector2 _scrollMobs, _scrollPlayers, _scrollCache, _scrollVoiceLog, _scrollVoiceLogOut, _scrollOverlays;
         private const int VoiceLogMaxEntries = 200;
         private readonly List<VoiceLogEntry> _voiceLog = new List<VoiceLogEntry>();
         private readonly HashSet<string> _cacheExpandedPlayers = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
@@ -80,6 +80,9 @@ namespace TFS_Mimics
             public int Bytes;
             public bool IsComplete;
             public float ReceivedAt;
+            public float UpdatedAt;
+            public int ChunksDone;
+            public int ChunksTotal;
         }
 
         // ─── GUI Styles & Textures ───────────────────────────────────────────────

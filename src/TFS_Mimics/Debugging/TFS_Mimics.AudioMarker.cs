@@ -13,7 +13,7 @@ namespace TFS_Mimics
     {
         // ─── Shared resources ────────────────────────────────────────────────────
         private static Sprite s_sprite;
-        private static Font   s_font;
+        private static Font s_font;
 
         private static Sprite GetSprite()
         {
@@ -33,28 +33,28 @@ namespace TFS_Mimics
         }
 
         // ─── Colors ──────────────────────────────────────────────────────────────
-        private static readonly Color CAccent  = new Color(0.35f, 0.65f, 1.00f);
-        private static readonly Color CBg      = new Color(0.05f, 0.07f, 0.11f, 0.82f);
-        private static readonly Color CGreen   = new Color(0.30f, 0.85f, 0.40f);
-        private static readonly Color CDim     = new Color(0.50f, 0.55f, 0.60f, 0.75f);
-        private static readonly Color CText    = new Color(0.88f, 0.91f, 0.95f);
-        private static readonly Color CYellow  = new Color(1.00f, 0.80f, 0.20f);
+        private static readonly Color CAccent = new Color(0.35f, 0.65f, 1.00f);
+        private static readonly Color CBg = new Color(0.05f, 0.07f, 0.11f, 0.82f);
+        private static readonly Color CGreen = new Color(0.30f, 0.85f, 0.40f);
+        private static readonly Color CDim = new Color(0.50f, 0.55f, 0.60f, 0.75f);
+        private static readonly Color CText = new Color(0.88f, 0.91f, 0.95f);
+        private static readonly Color CYellow = new Color(1.00f, 0.80f, 0.20f);
 
         // ─── Layout ──────────────────────────────────────────────────────────────
-        private const float PanelW      = 100f;
-        private const float PanelH      = 38f;
-        private const float WorldScale  = 0.010f;   // ~1 × 0.38 m world-unit size
-        private const float YOffset     = 0.6f;     // metres above the component pivot
+        private const float PanelW = 100f;
+        private const float PanelH = 38f;
+        private const float WorldScale = 0.010f;   // ~1 × 0.38 m world-unit size
+        private const float YOffset = 0.6f;     // metres above the component pivot
 
         // ─── Runtime ─────────────────────────────────────────────────────────────
-        private AudioSource     _source;
-        private Canvas          _canvas;
-        private RectTransform   _canvasRect;
-        private Image           _bg;
-        private Image           _border;
-        private Text            _iconText;
-        private Text            _stateText;
-        private float           _pulse;
+        private AudioSource _source;
+        private Canvas _canvas;
+        private RectTransform _canvasRect;
+        private Image _bg;
+        private Image _border;
+        private Text _iconText;
+        private Text _stateText;
+        private float _pulse;
 
         public void Init(AudioSource src)
         {
@@ -105,7 +105,7 @@ namespace TFS_Mimics
 
             if (_iconText != null)
             {
-                _iconText.text  = playing ? "\u266b" : "\u266a";
+                _iconText.text = playing ? "\u266b" : "\u266a";
                 var ic = playing ? CGreen : CDim;
                 ic.a = _pulse;
                 _iconText.color = ic;
@@ -146,14 +146,14 @@ namespace TFS_Mimics
         // ─── UI ──────────────────────────────────────────────────────────────────
         private void BuildUI()
         {
-            var go             = new GameObject("_MimicsAudioMarkerCanvas");
+            var go = new GameObject("_MimicsAudioMarkerCanvas");
             go.transform.SetParent(transform, false);
 
-            _canvas            = go.AddComponent<Canvas>();
+            _canvas = go.AddComponent<Canvas>();
             _canvas.renderMode = RenderMode.WorldSpace;
             _canvas.sortingOrder = 101;
 
-            _canvasRect           = go.GetComponent<RectTransform>();
+            _canvasRect = go.GetComponent<RectTransform>();
             _canvasRect.sizeDelta = new Vector2(PanelW, PanelH);
             _canvasRect.localScale = Vector3.one * WorldScale;
 
@@ -184,25 +184,25 @@ namespace TFS_Mimics
         private Image MkImg(Transform parent, string name, Color color,
             float xMin, float xMax, float yMin, float yMax)
         {
-            var go  = new GameObject(name);
+            var go = new GameObject(name);
             go.transform.SetParent(parent, false);
-            var img    = go.AddComponent<Image>();
+            var img = go.AddComponent<Image>();
             img.sprite = GetSprite();
-            img.color  = color;
+            img.color = color;
             SetAnch(go.GetComponent<RectTransform>(), xMin, xMax, yMin, yMax);
             return img;
         }
 
         private Text MkText(Transform parent, string name, int fontSize, FontStyle style, Color color)
         {
-            var go           = new GameObject(name);
+            var go = new GameObject(name);
             go.transform.SetParent(parent, false);
-            var t            = go.AddComponent<Text>();
-            t.font           = GetFont();
-            t.fontSize       = fontSize;
-            t.fontStyle      = style;
-            t.color          = color;
-            t.raycastTarget  = false;
+            var t = go.AddComponent<Text>();
+            t.font = GetFont();
+            t.fontSize = fontSize;
+            t.fontStyle = style;
+            t.color = color;
+            t.raycastTarget = false;
             t.supportRichText = false;
             return t;
         }

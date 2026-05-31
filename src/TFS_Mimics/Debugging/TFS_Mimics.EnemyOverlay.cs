@@ -60,7 +60,7 @@ namespace TFS_Mimics
         private const float PanelH = 82f;
         private const float WorldScale = 0.012f;   // world-unit size: ~1.92 × 0.98 m
         private const float HeadOffset = 0.8f;     // metres above CenterTransform
-        private const float DataHz = 0.2f;     // data refresh interval
+        private const float DataHz = 0.2f;         // data refresh interval
 
         // ─── Runtime state ───────────────────────────────────────────────────────
         private EnemyParent _enemyParent;

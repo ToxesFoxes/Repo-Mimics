@@ -6,7 +6,7 @@ namespace TFS_Mimics
     public partial class TFS_Mimics
     {
         // ─── Voice Log ────────────────────────────────────────────────────────────
-        internal void PushVoiceLog(bool isIncoming, string txId, string playerId, string playerName, int bytes, bool isComplete, int chunksDone = 0, int chunksTotal = 0)
+        internal void PushVoiceLog(bool isIncoming, string txId, string playerId, string playerName, int bytes, bool isComplete, int chunksDone = 0, int chunksTotal = 0, bool isFailed = false)
         {
             var existing = _voiceLog.FindIndex(e => e.TransmissionId == txId);
             if (existing >= 0)
@@ -14,6 +14,7 @@ namespace TFS_Mimics
                 var e = _voiceLog[existing];
                 if (bytes > 0) e.Bytes = bytes;
                 e.IsComplete = isComplete;
+                e.IsFailed = isFailed;
                 e.UpdatedAt = Time.time;
                 if (chunksDone > 0) e.ChunksDone = chunksDone;
                 if (chunksTotal > 0) e.ChunksTotal = chunksTotal;
@@ -116,8 +117,13 @@ namespace TFS_Mimics
 
             GUILayout.BeginHorizontal();
 
-            // Complete / in-progress indicator
-            if (e.IsComplete)
+            // Complete / in-progress / failed indicator
+            if (e.IsFailed)
+            {
+                GUI.color = CRed;
+                GUILayout.Label("✗", _gsSmall, GUILayout.Width(14f));
+            }
+            else if (e.IsComplete)
             {
                 GUI.color = CGreen;
                 GUILayout.Label("✓", _gsSmall, GUILayout.Width(14f));

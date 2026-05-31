@@ -79,6 +79,7 @@ namespace TFS_Mimics
             public string PlayerName;
             public int Bytes;
             public bool IsComplete;
+            public bool IsFailed;
             public float ReceivedAt;
             public float UpdatedAt;
             public int ChunksDone;

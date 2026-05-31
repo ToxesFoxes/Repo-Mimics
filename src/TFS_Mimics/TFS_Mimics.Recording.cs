@@ -319,6 +319,7 @@ namespace TFS_Mimics
                 if (!PhotonNetwork.IsConnectedAndReady)
                 {
                     Log.LogWarning($"Photon disconnected during send at chunk={i}/{chunks.Count} {DebugContext()}");
+                    PushVoiceLog(false, transmissionId, localPlayerId, localPlayerName, audioData.Length, false, i, chunks.Count, isFailed: true);
                     yield break;
                 }
 
@@ -339,7 +340,8 @@ namespace TFS_Mimics
 
                 PushVoiceLog(false, transmissionId, localPlayerId, localPlayerName, audioData.Length, false, i + 1, chunks.Count);
 
-                yield return new WaitForSeconds(0.125f);
+                if (i < chunks.Count - 1)
+                    yield return new WaitForSeconds(0.125f);
             }
 
             Log.LogInfo($"Finished sending audio to players [{localPlayerName}]({localPlayerId}) tx={transmissionId} chunksSent={chunks.Count} target={target} {DebugContext()}");

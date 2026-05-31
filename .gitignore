@@ -401,7 +401,7 @@ FodyWeavers.xsd
 # Release
 r2modman/*.dll
 r2modman/*.md
-Release-r2modman.zip
+Release-r2modman-*.zip
 
 # Local MSBuild-config files
 Directory.Build.props.local

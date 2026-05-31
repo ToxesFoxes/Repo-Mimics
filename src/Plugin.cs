@@ -5,10 +5,12 @@ using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
+using RepoSteamNetworking.API;
 
 namespace TFS_Mimics
 {
-    [BepInPlugin("TFS_Mimics", "TFS_Mimics", "1.0.2")]
+    [BepInPlugin("TFS_Mimics", "TFS_Mimics", "1.0.3")]
+    [BepInDependency("Rune580.Mods.Repo.RepoSteamNetworking")]
     public class Plugin : BaseUnityPlugin
     {
         internal static ManualLogSource PluginLogger;
@@ -52,6 +54,9 @@ namespace TFS_Mimics
             configSamplingRate = /*                */ Config.Bind("Experimental", "Sampling Rate", 48000, new ConfigDescription("Microphone/sample rate.", new AcceptableValueRange<int>(16000, 48000), Array.Empty<object>()));
 
             configFilterEnabled = /*               */ Config.Bind("Filter", "Filter Enabled?", false, "Enable per-enemy mimic filter.");
+
+            RepoSteamNetwork.RegisterPacket<MimicsAudioPacket>();
+            RepoSteamNetwork.AddCallback<MimicsAudioPacket>(TFS_Mimics.OnMimicsAudioPacketReceived);
 
             harmony = new Harmony("TFS_Mimics");
             harmony.PatchAll();

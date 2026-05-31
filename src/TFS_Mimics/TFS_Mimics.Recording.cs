@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using Photon.Pun;
+using RepoSteamNetworking.API;
+using RepoSteamNetworking.Networking;
 using UnityEngine;
 
 namespace TFS_Mimics
@@ -316,59 +318,39 @@ namespace TFS_Mimics
             return (float)Math.Sqrt(sumSq / samples.Length);
         }
 
+        // Steam Networking chunk size — 200 KB keeps us well under the ~512 KB Steam message limit.
+        private const int SteamChunkSize = 204800;
+
         private IEnumerator SendAudioInChunks(byte[] audioData)
         {
-            if (audioData.Length > MaxSendBytes)
-            {
-                Log.LogWarning($"SendAudioInChunks: payload {audioData.Length} bytes exceeds MaxSendBytes={MaxSendBytes}, truncating to prevent Photon buffer overflow {DebugContext()}");
-                var truncated = new byte[MaxSendBytes];
-                Array.Copy(audioData, truncated, MaxSendBytes);
-                audioData = truncated;
-            }
-
             _isSendingAudio = true;
-            var chunks = ChunkAudioData(audioData, 8192);
+            var chunks = ChunkAudioData(audioData, SteamChunkSize);
             var transmissionId = Guid.NewGuid().ToString("N");
             var localPlayer = PhotonNetwork.LocalPlayer;
             var localPlayerId = GetPlayerPersistentId(localPlayer);
             var localPlayerName = GetPlayerDisplayName(localPlayer);
-            var target = Plugin.configHearYourself.Value ? RpcTarget.All : RpcTarget.Others;
-            Log.LogInfo($"Start sending audio to players [{localPlayerName}]({localPlayerId}) tx={transmissionId} bytes={audioData.Length} chunks={chunks.Count} target={target} {DebugContext()}");
-            DLog($"SendAudioInChunks begin: totalBytes={audioData.Length} chunks={chunks.Count} chunkSize=8192 {DebugContext()}");
+            var destination = Plugin.configHearYourself.Value ? NetworkDestination.Everyone : NetworkDestination.EveryoneExcludingSender;
+            Log.LogInfo($"Start sending audio [{localPlayerName}]({localPlayerId}) tx={transmissionId} bytes={audioData.Length} chunks={chunks.Count} destination={destination} {DebugContext()}");
+            DLog($"SendAudioInChunks begin: totalBytes={audioData.Length} chunks={chunks.Count} chunkSize={SteamChunkSize} {DebugContext()}");
 
             for (var i = 0; i < chunks.Count; i++)
             {
-                if (!PhotonNetwork.IsConnectedAndReady)
+                var packet = new MimicsAudioPacket
                 {
-                    Log.LogWarning($"Photon disconnected during send at chunk={i}/{chunks.Count} {DebugContext()}");
-                    PushVoiceLog(false, transmissionId, localPlayerId, localPlayerName, audioData.Length, false, i, chunks.Count, isFailed: true);
-                    _isSendingAudio = false;
-                    yield break;
-                }
+                    ChunkData = chunks[i],
+                    ChunkIndex = i,
+                    TotalChunks = chunks.Count,
+                    SampleRate = sampleRate,
+                    TransmissionId = transmissionId,
+                    SenderActorNumber = localPlayer.ActorNumber
+                };
 
-                var applyVoiceFilter = false;
-
-                photonView.RPC(
-                    "ReceiveAudioChunkV2",
-                    target,
-                    chunks[i],
-                    i,
-                    chunks.Count,
-                    applyVoiceFilter,
-                    sampleRate,
-                    transmissionId
-                );
-
-                DLog($"RPC sent: tx={transmissionId} chunk={i + 1}/{chunks.Count} bytes={chunks[i].Length} target={target} applyVoiceFilter={applyVoiceFilter} senderSampleRate={sampleRate} {DebugContext()}");
-
+                RepoSteamNetwork.SendPacket(packet, destination);
+                DLog($"Steam packet sent: tx={transmissionId} chunk={i + 1}/{chunks.Count} bytes={chunks[i].Length} destination={destination} {DebugContext()}");
                 PushVoiceLog(false, transmissionId, localPlayerId, localPlayerName, audioData.Length, false, i + 1, chunks.Count);
-
-                if (i < chunks.Count - 1)
-                    yield return new WaitForSeconds(0.125f);
             }
 
-            Log.LogInfo($"Finished sending audio to players [{localPlayerName}]({localPlayerId}) tx={transmissionId} chunksSent={chunks.Count} target={target} {DebugContext()}");
-            DLog($"SendAudioInChunks complete: chunksSent={chunks.Count} {DebugContext()}");
+            Log.LogInfo($"Finished sending audio [{localPlayerName}]({localPlayerId}) tx={transmissionId} chunksSent={chunks.Count} {DebugContext()}");
             PushVoiceLog(false, transmissionId, localPlayerId, localPlayerName, audioData.Length, true, chunks.Count, chunks.Count);
             _isSendingAudio = false;
 
@@ -378,6 +360,8 @@ namespace TFS_Mimics
                 Log.LogInfo($"SendQueue: starting next transmission ({next.Length} bytes, remaining={_sendQueue.Count}) {DebugContext()}");
                 StartCoroutine(SendAudioInChunks(next));
             }
+
+            yield break;
         }
     }
 }

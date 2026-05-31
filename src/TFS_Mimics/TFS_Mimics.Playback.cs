@@ -13,12 +13,11 @@ namespace TFS_Mimics
         [PunRPC]
         public void ReceiveAudioChunkV2(byte[] chunk, int chunkIndex, int totalChunks, bool applyFilter, int senderSampleRate, string transmissionId, PhotonMessageInfo info)
         {
-            ReceiveAudioChunkInternal(chunk, chunkIndex, totalChunks, applyFilter, senderSampleRate, transmissionId, info);
+            ReceiveAudioChunkInternal(chunk, chunkIndex, totalChunks, applyFilter, senderSampleRate, transmissionId, info.Sender);
         }
 
-        private void ReceiveAudioChunkInternal(byte[] chunk, int chunkIndex, int totalChunks, bool applyFilter, int senderSampleRate, string transmissionId, PhotonMessageInfo info)
+        internal void ReceiveAudioChunkInternal(byte[] chunk, int chunkIndex, int totalChunks, bool applyFilter, int senderSampleRate, string transmissionId, Photon.Realtime.Player sender)
         {
-            var sender = info.Sender;
             var senderActor = sender != null ? sender.ActorNumber : -1;
             var senderPlayerId = sender != null ? GetPlayerPersistentId(sender) : "unknown";
             var senderName = sender != null ? sender.NickName : "unknown";

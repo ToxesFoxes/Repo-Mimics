@@ -352,6 +352,23 @@ namespace TFS_Mimics
 
             Log.LogInfo($"Finished sending audio [{localPlayerName}]({localPlayerId}) tx={transmissionId} chunksSent={chunks.Count} {DebugContext()}");
             PushVoiceLog(false, transmissionId, localPlayerId, localPlayerName, audioData.Length, true, chunks.Count, chunks.Count);
+
+            // Register self as ready so the host-authority eligibility check includes the sender.
+            // Also cache locally so the sender can play it back when a SyncPlayCommandPacket arrives.
+            var selfEntry = new CachedAudioEntry
+            {
+                AudioData = audioData,
+                ApplyVoiceFilter = false,
+                SampleRate = sampleRate,
+                SourceActor = localPlayer.ActorNumber,
+                SourcePlayerId = localPlayerId,
+                SourceName = localPlayerName,
+                ReceivedAt = Time.time,
+                SoundGuid = transmissionId
+            };
+            cachedAudio.Add(selfEntry);
+            NotifyHostSoundReady(transmissionId);
+
             _isSendingAudio = false;
 
             if (_sendQueue.Count > 0)

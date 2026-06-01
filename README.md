@@ -1,15 +1,12 @@
 # Mimics Mod for R.E.P.O
 
+[![Thunderstore](https://img.shields.io/thunderstore/v/ToxesFoxes/Mimics?logo=thunderstore&logoColor=white&label=Thunderstore)](https://thunderstore.io/c/repo/p/ToxesFoxes/Mimics/)
+[![Thunderstore Downloads](https://img.shields.io/thunderstore/dt/ToxesFoxes/Mimics?logo=thunderstore&logoColor=white&label=Downloads)](https://thunderstore.io/c/repo/p/ToxesFoxes/Mimics/)
+[![GitHub Release](https://img.shields.io/github/v/release/ToxesFoxes/Repo-Mimics?label=GitHub%20Release&color=green)](https://github.com/ToxesFoxes/Repo-Mimics/releases)
+![Version](https://img.shields.io/badge/Current%20Version-1.1.0-blue)
+
 Mimics adds a voice-mimic mechanic to monsters in R.E.P.O.
 They can replay random phrases recorded during gameplay, making it harder to trust what you hear.
-
-[![Thunderstore](https://img.shields.io/badge/Thunderstore-1.1.0-green)](https://thunderstore.io/c/repo/p/ToxesFoxes/Mimics/)
-[![GitHub Release](https://img.shields.io/github/v/release/ToxesFoxes/Repo-Mimics?label=GitHub%20Release&color=orange)](https://github.com/ToxesFoxes/Repo-Mimics/releases)
-
-![Version](https://img.shields.io/badge/version-1.1.0-blue)
-![Game](https://img.shields.io/badge/game-R.E.P.O-green)
-![Loader](https://img.shields.io/badge/loader-BepInEx-6aa84f)
-![Status](https://img.shields.io/badge/status-working-brightgreen)
 
 ## 📖 Description
 
@@ -22,14 +19,15 @@ Both Host and Clients need to install this mod to work.
 
 ## 🧩 Compatibility
 
-This mod is incompatible with mods like [Disable Noise Reduction](https://thunderstore.io/c/repo/p/SVRZ/Disable_Noise_Reduction/) by [SVRZ](https://thunderstore.io/c/repo/p/SVRZ/), as it relies on the game's built-in noise reduction to capture audio and send chunks to other players correctly.
+This mod is incompatible with mods:
+1.  [Disable Noise Reduction](https://thunderstore.io/c/repo/p/SVRZ/Disable_Noise_Reduction/) by [SVRZ](https://thunderstore.io/c/repo/p/SVRZ/), as it relies on the game's built-in noise reduction to capture audio and send chunks to other players correctly.
 
 ## ✨ Features
 
 - Monsters mimic player voices recorded during the current session
 - In multiplayer, all players hear the same mimic clip on the same enemy at the same time
 - Voice can be played back with a random pitch or alien filter — the host decides which, so all players hear the same effect
-- **Custom audio support** — drop your own `.mp3`, `.wav`, or `.ogg` files into the `custom-audio` folder to add more sounds to the mimic pool
+- Custom audio support — drop your own `.mp3`, `.wav`, or `.ogg` files into the `custom-audio` folder to add more sounds to the mimic pool
 - Mod authors can register custom clips at runtime via the public `MimicsAPI`
 
 ## 📦 Installation via r2modman

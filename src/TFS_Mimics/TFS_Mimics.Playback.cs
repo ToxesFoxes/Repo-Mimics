@@ -86,9 +86,13 @@ namespace TFS_Mimics
                 SourceActor = transmission.SenderActor,
                 SourcePlayerId = transmission.SenderPlayerId,
                 SourceName = transmission.SenderName,
-                ReceivedAt = Time.time
+                ReceivedAt = Time.time,
+                SoundGuid = tx
             };
             cachedAudio.Add(entry);
+
+            // Notify host that this client now has this sound
+            NotifyHostSoundReady(tx);
 
             if (Plugin.configPersistAudioCache != null && Plugin.configPersistAudioCache.Value)
             {
@@ -121,6 +125,8 @@ namespace TFS_Mimics
 
         private void TryPlayRandomCachedAudio()
         {
+            // In multiplayer, playback is driven by host SyncPlayCommandPacket
+            if (PhotonNetwork.CurrentRoom != null) return;
             var onlinePlayerIds = GetOnlinePlayerIds();
             var playableEntries = cachedAudio
                 .Where(e =>
@@ -837,6 +843,130 @@ namespace TFS_Mimics
             DLog($"GetEnemiesList: found {list.Count} enemies in scene {DebugContext()}");
 
             return list;
+        }
+
+        // ─── Phase 5: Synchronized playback driven by host command ───────────────
+
+        internal void HandleSyncPlayCommand(SyncPlayCommandPacket packet)
+        {
+            if (packet == null) return;
+
+            var masterClient = PhotonNetwork.MasterClient;
+            if (masterClient == null || packet.HostActorNumber != masterClient.ActorNumber)
+            {
+                DLog($"HandleSyncPlayCommand: rejected — hostActor={packet.HostActorNumber} master={masterClient?.ActorNumber}");
+                return;
+            }
+
+            var guid = packet.SoundGuid;
+            if (string.IsNullOrEmpty(guid) || packet.EnemyViewIds == null || packet.EnemyViewIds.Length == 0) return;
+
+            var voiceEntry = cachedAudio.FirstOrDefault(e => e?.SoundGuid == guid);
+            if (voiceEntry != null)
+            {
+                foreach (var viewId in packet.EnemyViewIds)
+                    PlayVoiceEntryOnEnemy(voiceEntry, viewId);
+                return;
+            }
+
+            // Try custom audio — match by SoundGuid or by ContentHash (cross-platform GUID mismatch)
+            var customEntry = _customAudioClips.FirstOrDefault(e => e?.SoundGuid == guid)
+                ?? _customAudioClips.FirstOrDefault(e =>
+                    e != null && !string.IsNullOrEmpty(e.ContentHash) &&
+                    _customAudioClips.Any(c => c.SoundGuid == guid && c.ContentHash == e.ContentHash));
+
+            if (customEntry != null)
+            {
+                foreach (var viewId in packet.EnemyViewIds)
+                    PlayCustomEntryOnEnemy(customEntry, viewId);
+                return;
+            }
+
+            DLog($"HandleSyncPlayCommand: no audio found for guid={guid}");
+        }
+
+        private void PlayVoiceEntryOnEnemy(CachedAudioEntry entry, int enemyViewId)
+        {
+            var enemyGo = GetEnemyGameObjectByViewId(enemyViewId);
+            if (enemyGo == null) return;
+
+            var playbackFilterEnabled = Plugin.configPlaybackVoiceFilterEnabled == null || Plugin.configPlaybackVoiceFilterEnabled.Value;
+            var applyVoiceFilter = playbackFilterEnabled && UnityEngine.Random.value > 0.9f;
+            var samples = ConvertByteArrayToFloatArray(entry.AudioData, applyVoiceFilter, entry.SampleRate);
+            var clip = AudioClip.Create("SyncVoiceClip", samples.Length, 1, entry.SampleRate, false);
+            clip.SetData(samples, 0);
+            PlayClipOnEnemyGameObject(clip, enemyGo, GetVolumeForPlayer(entry.SourcePlayerId));
+        }
+
+        private void PlayCustomEntryOnEnemy(CustomAudioEntry entry, int enemyViewId)
+        {
+            if (entry?.Clip == null) return;
+            var enemyGo = GetEnemyGameObjectByViewId(enemyViewId);
+            if (enemyGo == null) return;
+
+            if (!entry.IsNormalized)
+            {
+                NormalizeClip(entry.Clip);
+                entry.IsNormalized = true;
+            }
+
+            PlayClipOnEnemyGameObject(entry.Clip, enemyGo, GetVolumeForPlayer("custom"));
+        }
+
+        private void PlayClipOnEnemyGameObject(AudioClip clip, GameObject enemyGo, float volume)
+        {
+            var sourceComponent = GetOrCreateReusableEnemyAudioSource(enemyGo, null, enemyGo.transform.position);
+            if (sourceComponent == null) return;
+
+            sourceComponent.clip = clip;
+            sourceComponent.volume = volume;
+            sourceComponent.mute = false;
+            sourceComponent.pitch = 1f;
+            sourceComponent.loop = false;
+            sourceComponent.bypassEffects = false;
+            sourceComponent.bypassListenerEffects = false;
+            sourceComponent.spatialBlend = 1f;
+            sourceComponent.dopplerLevel = 0.5f;
+            sourceComponent.minDistance = 1f;
+            sourceComponent.maxDistance = 20f;
+            sourceComponent.rolloffMode = AudioRolloffMode.Linear;
+            sourceComponent.outputAudioMixerGroup = null;
+            sourceComponent.Play();
+
+            var targetKey = GetPlaybackTargetKey(enemyGo, null);
+            if (targetKey != 0)
+            {
+                playbackBusyUntilByTargetKey[targetKey] = Time.time + clip.length + 0.1f;
+                playbackStartedAtByTargetKey[targetKey] = Time.time;
+                playbackClipLengthByTargetKey[targetKey] = clip.length;
+            }
+
+            currentPlaybackEnemyName = NormalizeEnemyName(enemyGo.name);
+            currentPlaybackSourcePlayerId = "sync";
+            hudTrackedEnemy = enemyGo;
+            hudLastSelectedEnemyPos = enemyGo.transform.position;
+            hudHasSelectedEnemyPos = true;
+            currentPlaybackEndsAt = Time.time + clip.length + 0.1f;
+
+            DLog($"SyncPlay: clip on enemy={enemyGo.name} len={clip.length:F2}s vol={volume:F2}");
+            StartCoroutine(ResetReusableAudioSourceAfterDelay(sourceComponent, clip.length + 0.1f));
+        }
+
+        // ─── Phase 6: Mob identification helper ───────────────────────────────────
+
+        internal static int GetEnemyNetViewId(GameObject enemyGo)
+        {
+            if (enemyGo == null) return -1;
+            var pv = enemyGo.GetComponent<PhotonView>()
+                  ?? enemyGo.GetComponentInChildren<PhotonView>(true)
+                  ?? enemyGo.GetComponentInParent<PhotonView>();
+            return pv?.ViewID ?? -1;
+        }
+
+        private static GameObject GetEnemyGameObjectByViewId(int viewId)
+        {
+            var pv = PhotonView.Find(viewId);
+            return pv?.gameObject;
         }
     }
 }

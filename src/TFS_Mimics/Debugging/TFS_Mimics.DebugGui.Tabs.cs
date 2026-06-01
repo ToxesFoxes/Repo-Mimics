@@ -338,7 +338,11 @@ namespace TFS_Mimics
             // ── Header: cache stats + toolbar ────────────────────────────────────
             GUILayout.BeginHorizontal();
             GUI.color = CTextDim;
-            GUILayout.Label($"Total: {cachedAudio.Count} clips   In-progress: {incomingAudioTransmissions.Count} transmissions   Custom: {_customAudioClips.Count}", _gsSmall);
+            var totalPlayers = PhotonNetwork.PlayerList?.Length ?? 0;
+            var eligibleCount = totalPlayers > 0
+                ? soundReadinessMap.Count(kv => System.Array.TrueForAll(PhotonNetwork.PlayerList, p => kv.Value.Contains(p.ActorNumber)))
+                : 0;
+            GUILayout.Label($"Total: {cachedAudio.Count} clips   In-progress: {incomingAudioTransmissions.Count} transmissions   Custom: {_customAudioClips.Count}   Readiness: {eligibleCount}/{soundReadinessMap.Count} eligible", _gsSmall);
             GUI.color = Color.white;
             GUILayout.FlexibleSpace();
             GUI.color = CAccentDim;
@@ -471,6 +475,12 @@ namespace TFS_Mimics
                             {
                                 GUI.color = CTextDim;
                                 GUILayout.Label("[folder]", _gsSmall, GUILayout.Width(55f));
+                            }
+                            // SoundGuid indicator
+                            if (!string.IsNullOrEmpty(ce.SoundGuid))
+                            {
+                                GUI.color = new Color(0.4f, 0.7f, 0.4f);
+                                GUILayout.Label("✓", _gsSmall, GUILayout.Width(14f));
                             }
                             GUI.color = Color.white;
                             GUILayout.EndHorizontal();
@@ -645,6 +655,64 @@ namespace TFS_Mimics
 
                 GUILayout.EndVertical();
                 GUILayout.Space(2f);
+            }
+
+            GUILayout.EndScrollView();
+
+            // ── Sound Readiness Map ─────────────────────────────────────────────
+            GUILayout.Space(4f);
+            DrawReadinessSection();
+        }
+
+        private void DrawReadinessSection()
+        {
+            var allPlayers = PhotonNetwork.PlayerList;
+            var totalPlayers = allPlayers?.Length ?? 0;
+
+            GUILayout.BeginHorizontal();
+            GUI.color = CAccent;
+            GUILayout.Label("SOUND READINESS", _gsH1, GUILayout.ExpandWidth(false));
+            GUI.color = CTextDim;
+            GUILayout.Label($"({soundReadinessMap.Count} guids  |  {totalPlayers} player{(totalPlayers != 1 ? "s" : "")})", _gsSmall, GUILayout.ExpandWidth(false));
+            GUI.color = Color.white;
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Clear", _gsBtnDanger, GUILayout.Height(20f), GUILayout.ExpandWidth(false)))
+                soundReadinessMap.Clear();
+            GUILayout.EndHorizontal();
+            DrawHRule();
+
+            if (soundReadinessMap.Count == 0)
+            {
+                GUI.color = CTextDim;
+                GUILayout.Label("  No sound GUIDs registered yet.", _gsSmall);
+                GUI.color = Color.white;
+                return;
+            }
+
+            _scrollReadiness = GUILayout.BeginScrollView(_scrollReadiness, GUILayout.Height(Mathf.Min(130f, soundReadinessMap.Count * 19f + 6f)));
+
+            foreach (var kv in soundReadinessMap)
+            {
+                var guid = kv.Key;
+                var have = kv.Value.Count;
+                var eligible = totalPlayers > 0 && allPlayers != null &&
+                               System.Array.TrueForAll(allPlayers, p => kv.Value.Contains(p.ActorNumber));
+
+                GUILayout.BeginHorizontal();
+                GUI.color = eligible ? CGreen : CYellow;
+                GUILayout.Label(eligible ? "●" : "○", _gsSmall, GUILayout.Width(12f));
+                GUI.color = CText;
+                var shortGuid = guid.Length > 16 ? guid.Substring(0, 16) + "…" : guid;
+                GUILayout.Label(shortGuid, _gsSmall, GUILayout.Width(180f));
+                GUI.color = CTextDim;
+                GUILayout.Label($"{have}/{totalPlayers}", _gsSmall, GUILayout.Width(40f));
+                if (eligible)
+                {
+                    GUI.color = CGreen;
+                    GUILayout.Label("eligible", _gsSmall, GUILayout.ExpandWidth(false));
+                }
+                GUI.color = Color.white;
+                GUILayout.EndHorizontal();
             }
 
             GUILayout.EndScrollView();

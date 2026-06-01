@@ -22,6 +22,7 @@ namespace TFS_Mimics
             public string SourcePlayerId;
             public string SourceName;
             public float ReceivedAt;
+            public string SoundGuid;
         }
 
         private sealed class HudPlaybackCandidate
@@ -121,6 +122,11 @@ namespace TFS_Mimics
         private readonly Dictionary<string, int> playerVolumeOverrides = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         private const float IncomingTransmissionTimeoutSeconds = 30f;
 
+        // Host Authority — soundGuid → set of actorNumbers that have confirmed they have the sound.
+        // Static so it survives level transitions alongside cachedAudio.
+        private static readonly Dictionary<string, HashSet<int>> soundReadinessMap = new Dictionary<string, HashSet<int>>();
+        private bool _hostAuthorityLoopRunning;
+
         private string DebugContext()
         {
             var local = PhotonNetwork.LocalPlayer;
@@ -187,6 +193,7 @@ namespace TFS_Mimics
         {
             if (Instance == this)
                 Instance = null;
+            PhotonNetwork.RemoveCallbackTarget(this);
         }
 
         private void Awake()
@@ -201,6 +208,9 @@ namespace TFS_Mimics
             }
 
             DLog($"Mimics Awake {DebugContext()} object={gameObject.name}");
+
+            if (photonView.IsMine)
+                PhotonNetwork.AddCallbackTarget(this);
 
             var avatar = GetComponent<PlayerAvatar>();
             if (avatar == null)
@@ -274,6 +284,8 @@ namespace TFS_Mimics
                 StartRecording();
                 StartCoroutine(PlayCachedAudioAtRandomIntervals());
                 StartCoroutine(EnsureEnemyAudioSourcesLoop());
+                if (PhotonNetwork.IsMasterClient && !_hostAuthorityLoopRunning)
+                    StartCoroutine(HostAuthorityLoopCoroutine());
                 DLog($"Local loops started: speech capture + random playback + audio source warmup {DebugContext()}");
             }
             else

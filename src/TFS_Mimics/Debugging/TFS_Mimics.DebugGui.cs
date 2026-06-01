@@ -37,8 +37,10 @@ namespace TFS_Mimics
         private string _settingMaxFilesBuf;
         private string _settingSamplingRateBuf;
         private string _settingNormalizeBuf;
+        private string _settingHostIntervalBuf;
         private bool _settingsDirty;
         private Vector2 _scrollSettings;
+        private Vector2 _scrollReadiness;
         // Per-player volume slider text buffers (keyed by persistent player ID)
         private readonly Dictionary<string, string> _playerVolBuf = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 

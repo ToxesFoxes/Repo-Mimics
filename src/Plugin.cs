@@ -9,7 +9,7 @@ using RepoSteamNetworking.API;
 
 namespace TFS_Mimics
 {
-    [BepInPlugin("TFS_Mimics", "TFS_Mimics", "1.0.3")]
+    [BepInPlugin("TFS_Mimics", "TFS_Mimics", "1.1.0")]
     [BepInDependency("com.rune580.reposteamnetworking")]
     public class Plugin : BaseUnityPlugin
     {
@@ -28,6 +28,7 @@ namespace TFS_Mimics
         public static ConfigEntry<bool> configPersistAudioCache;
         public static ConfigEntry<int> configPersistMaxFilesPerPlayer;
         public static ConfigEntry<int> configNormalizeTarget;
+        public static ConfigEntry<float> configHostAuthorityInterval;
 
         public static readonly Dictionary<string, ConfigEntry<bool>> enemyConfigEntries = new Dictionary<string, ConfigEntry<bool>>();
 
@@ -47,6 +48,7 @@ namespace TFS_Mimics
             configPersistAudioCache = /*           */ Config.Bind("General", "Persist Audio Cache", /*             */ false, /* */ "If true, received mimic audio clips are saved to disk and loaded on world entry.");
             configPersistMaxFilesPerPlayer = /*    */ Config.Bind("General", "Persist Max Files Per Player", /*    */ 100, /*   */ new ConfigDescription("Maximum number of persisted recordings to keep per player folder.", new AcceptableValueRange<int>(1, 5000), Array.Empty<object>()));
             configNormalizeTarget = /*             */ Config.Bind("General", "Normalize Target", /*                */ 85, /*    */ new ConfigDescription("Peak normalization target for voice and custom audio (0 = off, 100 = 0 dBFS).", new AcceptableValueRange<int>(0, 100), Array.Empty<object>()));
+            configHostAuthorityInterval = /*       */ Config.Bind("General", "Host Authority Interval", /*          */ 4f, /*    */ new ConfigDescription("Seconds between host-authority sound-sync ticks in multiplayer.", new AcceptableValueRange<float>(1f, 30f), Array.Empty<object>()));
             #endregion
 
             configDebugVerbose = /*                */ Config.Bind("Debug", "Verbose Logging", /*                 */ false, /**/ "Enable very detailed debug logs for the whole mimic pipeline.");
@@ -57,6 +59,13 @@ namespace TFS_Mimics
 
             RepoSteamNetwork.RegisterPacket<MimicsAudioPacket>();
             RepoSteamNetwork.AddCallback<MimicsAudioPacket>(TFS_Mimics.OnMimicsAudioPacketReceived);
+
+            RepoSteamNetwork.RegisterPacket<SoundReadyPacket>();
+            RepoSteamNetwork.AddCallback<SoundReadyPacket>(TFS_Mimics.OnSoundReadyPacketReceived);
+            RepoSteamNetwork.RegisterPacket<CustomSoundManifestPacket>();
+            RepoSteamNetwork.AddCallback<CustomSoundManifestPacket>(TFS_Mimics.OnCustomSoundManifestReceived);
+            RepoSteamNetwork.RegisterPacket<SyncPlayCommandPacket>();
+            RepoSteamNetwork.AddCallback<SyncPlayCommandPacket>(TFS_Mimics.OnSyncPlayCommandReceived);
 
             harmony = new Harmony("TFS_Mimics");
             harmony.PatchAll();

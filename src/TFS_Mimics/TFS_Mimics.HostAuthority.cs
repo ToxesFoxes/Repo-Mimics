@@ -19,10 +19,17 @@ namespace TFS_Mimics
             _hostAuthorityLoopRunning = true;
             DLog("HostAuthorityLoop: started");
 
-            while (photonView != null && PhotonNetwork.IsMasterClient)
+            while (photonView != null && SemiFunc.IsMasterClientOrSingleplayer())
             {
-                var interval = (float)(Plugin.configHostAuthorityInterval?.Value ?? 4);
-                yield return new WaitForSeconds(interval);
+                var minDelay = (float)(Plugin.configMinDelay?.Value ?? 10);
+                var maxDelay = (float)(Plugin.configMaxDelay?.Value ?? 20);
+                // Clamp so min <= max; fall back to configHostAuthorityInterval only when both are missing
+                if (maxDelay < minDelay) maxDelay = minDelay;
+                var delay = UnityEngine.Random.Range(minDelay, maxDelay);
+                DLog($"HostAuthorityLoop: next tick in {delay:F1}s");
+                _nextTickAt = Time.time + delay;
+                yield return new WaitForSeconds(delay);
+                _nextTickAt = -1f;
 
                 if (!SemiFunc.RunIsLevel()) continue;
 
@@ -59,12 +66,15 @@ namespace TFS_Mimics
 
             if (enemies.Count == 0) return;
 
-            // Build enemy data list
+            // Build enemy data list — skip enemies currently playing audio
             var enemyData = new List<(GameObject go, int viewId, Vector3 pos)>();
             foreach (var enemy in enemies)
             {
                 var viewId = GetEnemyNetViewId(enemy);
                 if (viewId < 0) continue;
+                var targetKey = GetPlaybackTargetKey(enemy, null);
+                if (targetKey != 0 && playbackBusyUntilByTargetKey.TryGetValue(targetKey, out var busyUntil) && busyUntil > Time.time)
+                    continue;
                 var pos = GetEnemyDistancePosition(enemy, null);
                 enemyData.Add((enemy, viewId, pos));
             }
@@ -140,11 +150,17 @@ namespace TFS_Mimics
             if (selectedViewIds.Count == 0) return;
 
             var hostActor = PhotonNetwork.LocalPlayer?.ActorNumber ?? -1;
+            var filterEnabled = Plugin.configPlaybackVoiceFilterEnabled == null || Plugin.configPlaybackVoiceFilterEnabled.Value;
+            // Host picks filter mode once; -1 = no filter, 0/1/2 = specific effect
+            var voiceFilterMode = (filterEnabled && UnityEngine.Random.value > 0.9f)
+                ? UnityEngine.Random.Range(0, 3)
+                : -1;
             var cmd = new SyncPlayCommandPacket
             {
                 SoundGuid = soundGuid,
                 EnemyViewIds = selectedViewIds.ToArray(),
-                HostActorNumber = hostActor
+                HostActorNumber = hostActor,
+                VoiceFilterMode = voiceFilterMode
             };
 
             DLog($"HostAuthorityTick: guid={soundGuid} enemies=[{string.Join(",", selectedViewIds)}] players={playerNearbyEnemies.Count}");
@@ -175,7 +191,6 @@ namespace TFS_Mimics
                 StartCoroutine(HostAuthorityLoopCoroutine());
             }
         }
-
         public void OnRoomPropertiesUpdate(PhotonHashtable propertiesThatChanged) { }
         public void OnPlayerPropertiesUpdate(Player targetPlayer, PhotonHashtable changedProps) { }
     }

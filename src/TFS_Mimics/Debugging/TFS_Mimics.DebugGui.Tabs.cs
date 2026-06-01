@@ -125,7 +125,16 @@ namespace TFS_Mimics
             else
             {
                 GUI.color = CTextDim;
-                GUILayout.Label("No active playback", _gsSmall);
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("No active playback", _gsSmall, GUILayout.ExpandWidth(false));
+                if (_hostAuthorityLoopRunning && _nextTickAt > 0f)
+                {
+                    var remaining = Mathf.Max(0f, _nextTickAt - Time.time);
+                    GUILayout.FlexibleSpace();
+                    GUI.color = remaining < 3f ? CYellow : CTextDim;
+                    GUILayout.Label($"Next in {remaining:F1}s", _gsSmall, GUILayout.ExpandWidth(false));
+                }
+                GUILayout.EndHorizontal();
                 GUI.color = Color.white;
             }
 
@@ -234,74 +243,64 @@ namespace TFS_Mimics
         // ─── Tab 2: Players ───────────────────────────────────────────────────────
         private void DrawPlayersTab(float scrollH)
         {
-            var onlineIds = GetOnlinePlayerIds();
-            var localId = PhotonNetwork.LocalPlayer != null ? GetPlayerPersistentId(PhotonNetwork.LocalPlayer) : string.Empty;
-
-            var byPlayer = new Dictionary<string, (string name, int count)>(System.StringComparer.OrdinalIgnoreCase);
-            foreach (var e in cachedAudio)
-            {
-                if (e == null)
-                {
-                    continue;
-                }
-
-                var pid = !string.IsNullOrWhiteSpace(e.SourcePlayerId) ? e.SourcePlayerId : $"actor_{e.SourceActor}";
-                var name = !string.IsNullOrWhiteSpace(e.SourceName) ? e.SourceName : pid;
-                byPlayer[pid] = byPlayer.TryGetValue(pid, out var cur) ? (cur.name, cur.count + 1) : (name, 1);
-            }
-
-            if (PhotonNetwork.PlayerList != null)
-            {
-                foreach (var p in PhotonNetwork.PlayerList)
-                {
-                    if (p == null)
-                    {
-                        continue;
-                    }
-
-                    var pid = GetPlayerPersistentId(p);
-                    if (!byPlayer.ContainsKey(pid))
-                    {
-                        byPlayer[pid] = (string.IsNullOrWhiteSpace(p.NickName) ? pid : p.NickName, 0);
-                    }
-                }
-            }
-
             GUILayout.BeginHorizontal();
             GUI.color = CTextDim;
-            GUILayout.Label($"Online: {onlineIds.Count}   Players with clips: {byPlayer.Count(kv => kv.Value.count > 0)}", _gsSmall);
+            GUILayout.Label($"Online: {_cachedPlayersOnlineIds.Count}   Players with clips: {_cachedPlayersWithClips}", _gsSmall);
             GUI.color = Color.white;
             GUILayout.EndHorizontal();
             GUILayout.Space(3f);
 
             _scrollPlayers = GUILayout.BeginScrollView(_scrollPlayers, GUILayout.Height(scrollH));
 
-            var sorted = byPlayer
-                .OrderByDescending(kv => onlineIds.Contains(kv.Key))
-                .ThenBy(kv => kv.Value.name)
-                .ToList();
-
-            if (sorted.Count == 0)
+            if (_cachedPlayersSorted.Count == 0)
             {
                 GUI.color = CTextDim;
                 GUILayout.Label("  No player data available.", _gsLabel);
                 GUI.color = Color.white;
             }
 
-            foreach (var kv in sorted)
+            foreach (var (pid, pname, count) in _cachedPlayersSorted)
             {
-                var pid = kv.Key;
-                var (pname, count) = kv.Value;
-                var isOnline = onlineIds.Contains(pid);
-                var isLocal = string.Equals(pid, localId, System.StringComparison.OrdinalIgnoreCase);
-                DrawPlayerRow(pid, pname, count, isOnline, isLocal);
+                var isOnline = _cachedPlayersOnlineIds.Contains(pid);
+                var isLocal = string.Equals(pid, _cachedPlayersLocalId, System.StringComparison.OrdinalIgnoreCase);
+                _avatarMapCache.TryGetValue(pid, out var rowAvatar);
+                DrawPlayerRow(pid, pname, count, isOnline, isLocal, rowAvatar);
                 GUILayout.Space(2f);
             }
 
             GUILayout.EndScrollView();
         }
 
-        private void DrawPlayerRow(string pid, string name, int clipCount, bool isOnline, bool isLocal)
+        // ─── Avatar Map Cache ─────────────────────────────────────────────────────
+        private Dictionary<string, PlayerAvatar> _avatarMapCache = new Dictionary<string, PlayerAvatar>(StringComparer.OrdinalIgnoreCase);
+        private float _avatarMapNextRebuild;
+        private const float AvatarMapRebuildInterval = 1f;
+
+        private void RebuildAvatarMapIfNeeded()
+        {
+            if (Time.unscaledTime < _avatarMapNextRebuild) return;
+            _avatarMapNextRebuild = Time.unscaledTime + AvatarMapRebuildInterval;
+
+            _avatarMapCache.Clear();
+            var avatars = UnityEngine.Object.FindObjectsByType<PlayerAvatar>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var avatar in avatars)
+            {
+                if (avatar == null) continue;
+
+                if (!string.IsNullOrWhiteSpace(avatar.steamID) && avatar.steamID != "0")
+                    _avatarMapCache[avatar.steamID] = avatar;
+
+                var pv = avatar.photonView;
+                if (pv?.Owner != null)
+                {
+                    _avatarMapCache[$"actor_{pv.Owner.ActorNumber}"] = avatar;
+                    if (!string.IsNullOrWhiteSpace(pv.Owner.UserId))
+                        _avatarMapCache[pv.Owner.UserId] = avatar;
+                }
+            }
+        }
+
+        private void DrawPlayerRow(string pid, string name, int clipCount, bool isOnline, bool isLocal, PlayerAvatar avatar)
         {
             GUILayout.BeginVertical(_gsPanelBox);
             GUILayout.BeginHorizontal();
@@ -324,11 +323,89 @@ namespace TFS_Mimics
                 GUILayout.Label("[offline]", _gsSmall, GUILayout.Width(52f));
                 GUI.color = Color.white;
             }
+
+            var isMuted = avatar != null && avatar.voiceChatFetched && avatar.voiceChat != null && avatar.voiceChat.toggleMute;
+            if (isMuted)
+            {
+                GUI.color = CRed;
+                GUILayout.Label("✕ mic", _gsSmall, GUILayout.ExpandWidth(false));
+                GUI.color = Color.white;
+            }
             GUILayout.EndHorizontal();
 
             GUI.color = CTextDim;
             GUILayout.Label($"  id: {FitHudText(pid, 40)}", _gsSmall);
             GUI.color = Color.white;
+
+            if (avatar != null)
+            {
+                // ── State + Head + Movement ───────────────────────────────
+                GUILayout.BeginHorizontal();
+                GUI.color = CTextDim;
+                GUILayout.Label("  state:", _gsSmall, GUILayout.Width(42f));
+                GUI.color = Color.white;
+
+                if (avatar.isDisabled)
+                {
+                    GUI.color = CRed;
+                    GUILayout.Label("DEAD", _gsSmall, GUILayout.ExpandWidth(false));
+                    GUI.color = Color.white;
+                }
+                else if (avatar.deadSet)
+                {
+                    GUI.color = CYellow;
+                    GUILayout.Label("DYING", _gsSmall, GUILayout.ExpandWidth(false));
+                    GUI.color = Color.white;
+                }
+                else if (avatar.spawned)
+                {
+                    GUI.color = CGreen;
+                    GUILayout.Label("ALIVE", _gsSmall, GUILayout.ExpandWidth(false));
+                    GUI.color = Color.white;
+                }
+                else
+                {
+                    GUI.color = CTextDim;
+                    GUILayout.Label("SPAWNING", _gsSmall, GUILayout.ExpandWidth(false));
+                    GUI.color = Color.white;
+                }
+
+                if (avatar.playerDeathHead != null && avatar.playerDeathHead.triggered)
+                {
+                    GUILayout.Space(8f);
+                    GUI.color = CYellow;
+                    var headLoc = avatar.playerDeathHead.inTruck ? "truck"
+                                : avatar.playerDeathHead.inExtractionPoint ? "extraction" : "world";
+                    GUILayout.Label($"HEAD ({headLoc})", _gsSmall, GUILayout.ExpandWidth(false));
+                    GUI.color = Color.white;
+                }
+
+                var moveParts = new List<string>();
+                if (avatar.isTumbling) moveParts.Add("tumble");
+                if (avatar.isCrouching) moveParts.Add("crouch");
+                if (avatar.isSprinting) moveParts.Add("sprint");
+                if (avatar.isCrawling) moveParts.Add("crawl");
+                if (avatar.isSliding) moveParts.Add("slide");
+                if (moveParts.Count > 0)
+                {
+                    GUILayout.Space(8f);
+                    GUI.color = CTextDim;
+                    GUILayout.Label(string.Join(" ", moveParts), _gsSmall, GUILayout.ExpandWidth(false));
+                    GUI.color = Color.white;
+                }
+
+                GUILayout.EndHorizontal();
+
+                // ── Health bar ────────────────────────────────────────────
+                if (!avatar.isDisabled && avatar.playerHealth != null)
+                {
+                    var hp = avatar.playerHealth.health;
+                    var maxHp = avatar.playerHealth.maxHealth;
+                    var t = maxHp > 0 ? (float)hp / maxHp : 0f;
+                    var barColor = t > 0.5f ? CGreen : t > 0.25f ? CYellow : CRed;
+                    DrawProgressBar(t, $"HP  {hp} / {maxHp}", barColor);
+                }
+            }
             GUILayout.EndVertical();
         }
 
@@ -338,11 +415,7 @@ namespace TFS_Mimics
             // ── Header: cache stats + toolbar ────────────────────────────────────
             GUILayout.BeginHorizontal();
             GUI.color = CTextDim;
-            var totalPlayers = PhotonNetwork.PlayerList?.Length ?? 0;
-            var eligibleCount = totalPlayers > 0
-                ? soundReadinessMap.Count(kv => System.Array.TrueForAll(PhotonNetwork.PlayerList, p => kv.Value.Contains(p.ActorNumber)))
-                : 0;
-            GUILayout.Label($"Total: {cachedAudio.Count} clips   In-progress: {incomingAudioTransmissions.Count} transmissions   Custom: {_customAudioClips.Count}   Readiness: {eligibleCount}/{soundReadinessMap.Count} eligible", _gsSmall);
+            GUILayout.Label($"Total: {cachedAudio.Count} clips   In-progress: {incomingAudioTransmissions.Count} transmissions   Custom: {_customAudioClips.Count}   Readiness: {_cachedCacheTabEligibleCount}/{soundReadinessMap.Count} eligible", _gsSmall);
             GUI.color = Color.white;
             GUILayout.FlexibleSpace();
             GUI.color = CAccentDim;
@@ -361,28 +434,7 @@ namespace TFS_Mimics
             GUILayout.EndHorizontal();
             GUILayout.Space(3f);
 
-            // Build per-player groups (ordered: most clips first)
-            var byPlayer = new Dictionary<string, (string name, List<int> indices, float lastAt)>(System.StringComparer.OrdinalIgnoreCase);
-            for (var i = 0; i < cachedAudio.Count; i++)
-            {
-                var e = cachedAudio[i];
-                if (e == null) continue;
-                var pid = !string.IsNullOrWhiteSpace(e.SourcePlayerId) ? e.SourcePlayerId : $"actor_{e.SourceActor}";
-                var name = !string.IsNullOrWhiteSpace(e.SourceName) ? e.SourceName : pid;
-                if (byPlayer.TryGetValue(pid, out var cur))
-                {
-                    cur.indices.Add(i);
-                    byPlayer[pid] = (cur.name, cur.indices, Mathf.Max(cur.lastAt, e.ReceivedAt));
-                }
-                else
-                {
-                    byPlayer[pid] = (name, new List<int> { i }, e.ReceivedAt);
-                }
-            }
-
-            var sorted = byPlayer
-                .OrderByDescending(kv => kv.Value.indices.Count)
-                .ToList();
+            var sorted = _cachedCacheTabSorted;
 
             _scrollCache = GUILayout.BeginScrollView(_scrollCache, GUILayout.Height(scrollH));
 
@@ -500,10 +552,8 @@ namespace TFS_Mimics
                 GUI.color = Color.white;
             }
 
-            foreach (var kv in sorted)
+            foreach (var (pid, pname, indices, lastAt) in sorted)
             {
-                var pid = kv.Key;
-                var (pname, indices, lastAt) = kv.Value;
                 var age = Time.time - lastAt;
                 var ageStr = age < 60f ? $"{age:F0}s ago" : $"{age / 60f:F1}m ago";
                 var isExpanded = _cacheExpandedPlayers.Contains(pid);
@@ -666,8 +716,7 @@ namespace TFS_Mimics
 
         private void DrawReadinessSection()
         {
-            var allPlayers = PhotonNetwork.PlayerList;
-            var totalPlayers = allPlayers?.Length ?? 0;
+            var totalPlayers = PhotonNetwork.PlayerList?.Length ?? 0;
 
             GUILayout.BeginHorizontal();
             GUI.color = CAccent;
@@ -695,8 +744,7 @@ namespace TFS_Mimics
             {
                 var guid = kv.Key;
                 var have = kv.Value.Count;
-                var eligible = totalPlayers > 0 && allPlayers != null &&
-                               System.Array.TrueForAll(allPlayers, p => kv.Value.Contains(p.ActorNumber));
+                _cachedReadinessEligible.TryGetValue(guid, out var eligible);
 
                 GUILayout.BeginHorizontal();
                 GUI.color = eligible ? CGreen : CYellow;
@@ -741,6 +789,94 @@ namespace TFS_Mimics
 
             DLog($"PlayCacheEntryOnNearest: playing on {nearest.EnemyName} dist={nearest.Distance:F1}m {DebugContext()}");
             PlayReceivedAudioOnTarget(entry, nearest.Enemy, nearest.Target);
+        }
+
+        // ─── Tab Cache Rebuild ────────────────────────────────────────────────────
+        private void RebuildActiveTabCache()
+        {
+            switch (_debugTab)
+            {
+                case 1: RebuildPlayersTabCache(); break;
+                case 2: RebuildCacheTabCache(); break;
+                case 3: RebuildVoiceLogCache(); break;
+            }
+        }
+
+        private void RebuildPlayersTabCache()
+        {
+            _cachedPlayersOnlineIds.Clear();
+            foreach (var id in GetOnlinePlayerIds())
+                _cachedPlayersOnlineIds.Add(id);
+
+            _cachedPlayersLocalId = PhotonNetwork.LocalPlayer != null
+                ? GetPlayerPersistentId(PhotonNetwork.LocalPlayer)
+                : string.Empty;
+
+            var byPlayer = new Dictionary<string, (string name, int count)>(System.StringComparer.OrdinalIgnoreCase);
+            foreach (var e in cachedAudio)
+            {
+                if (e == null) continue;
+                var pid = !string.IsNullOrWhiteSpace(e.SourcePlayerId) ? e.SourcePlayerId : $"actor_{e.SourceActor}";
+                var name = !string.IsNullOrWhiteSpace(e.SourceName) ? e.SourceName : pid;
+                byPlayer[pid] = byPlayer.TryGetValue(pid, out var cur) ? (cur.name, cur.count + 1) : (name, 1);
+            }
+
+            if (PhotonNetwork.PlayerList != null)
+            {
+                foreach (var p in PhotonNetwork.PlayerList)
+                {
+                    if (p == null) continue;
+                    var pid = GetPlayerPersistentId(p);
+                    if (!byPlayer.ContainsKey(pid))
+                        byPlayer[pid] = (string.IsNullOrWhiteSpace(p.NickName) ? pid : p.NickName, 0);
+                }
+            }
+
+            _cachedPlayersSorted.Clear();
+            _cachedPlayersWithClips = 0;
+            foreach (var kv in byPlayer.OrderByDescending(kv => _cachedPlayersOnlineIds.Contains(kv.Key)).ThenBy(kv => kv.Value.name))
+            {
+                _cachedPlayersSorted.Add((kv.Key, kv.Value.name, kv.Value.count));
+                if (kv.Value.count > 0) _cachedPlayersWithClips++;
+            }
+        }
+
+        private void RebuildCacheTabCache()
+        {
+            var allPlayers = PhotonNetwork.PlayerList;
+            var totalPlayers = allPlayers?.Length ?? 0;
+
+            _cachedCacheTabEligibleCount = 0;
+            _cachedReadinessEligible.Clear();
+            foreach (var kv in soundReadinessMap)
+            {
+                var eligible = totalPlayers > 0 && allPlayers != null
+                    && System.Array.TrueForAll(allPlayers, p => kv.Value.Contains(p.ActorNumber));
+                _cachedReadinessEligible[kv.Key] = eligible;
+                if (eligible) _cachedCacheTabEligibleCount++;
+            }
+
+            var byPlayer = new Dictionary<string, (string name, List<int> indices, float lastAt)>(System.StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < cachedAudio.Count; i++)
+            {
+                var e = cachedAudio[i];
+                if (e == null) continue;
+                var pid = !string.IsNullOrWhiteSpace(e.SourcePlayerId) ? e.SourcePlayerId : $"actor_{e.SourceActor}";
+                var name = !string.IsNullOrWhiteSpace(e.SourceName) ? e.SourceName : pid;
+                if (byPlayer.TryGetValue(pid, out var cur))
+                {
+                    cur.indices.Add(i);
+                    byPlayer[pid] = (cur.name, cur.indices, Mathf.Max(cur.lastAt, e.ReceivedAt));
+                }
+                else
+                {
+                    byPlayer[pid] = (name, new List<int> { i }, e.ReceivedAt);
+                }
+            }
+
+            _cachedCacheTabSorted.Clear();
+            foreach (var kv in byPlayer.OrderByDescending(kv => kv.Value.indices.Count))
+                _cachedCacheTabSorted.Add((kv.Key, kv.Value.name, kv.Value.indices, kv.Value.lastAt));
         }
     }
 }

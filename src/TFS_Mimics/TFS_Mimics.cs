@@ -126,6 +126,7 @@ namespace TFS_Mimics
         // Static so it survives level transitions alongside cachedAudio.
         private static readonly Dictionary<string, HashSet<int>> soundReadinessMap = new Dictionary<string, HashSet<int>>();
         private bool _hostAuthorityLoopRunning;
+        private float _nextTickAt = -1f;
 
         private string DebugContext()
         {
@@ -282,10 +283,11 @@ namespace TFS_Mimics
                 EnsurePersistenceInitialized();
                 EnsureCustomAudioLoaded();
                 StartRecording();
-                StartCoroutine(PlayCachedAudioAtRandomIntervals());
                 StartCoroutine(EnsureEnemyAudioSourcesLoop());
-                if (PhotonNetwork.IsMasterClient && !_hostAuthorityLoopRunning)
+                if (SemiFunc.IsMasterClientOrSingleplayer() && !_hostAuthorityLoopRunning)
                     StartCoroutine(HostAuthorityLoopCoroutine());
+                else if (PhotonNetwork.CurrentRoom == null)
+                    StartCoroutine(PlayCachedAudioAtRandomIntervals()); // true solo without Photon
                 DLog($"Local loops started: speech capture + random playback + audio source warmup {DebugContext()}");
             }
             else

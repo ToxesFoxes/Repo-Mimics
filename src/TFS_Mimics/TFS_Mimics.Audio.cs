@@ -72,6 +72,13 @@ namespace TFS_Mimics
 
         private float[] ConvertByteArrayToFloatArray(byte[] bytes, bool applyVoiceFilter, int senderSampleRate)
         {
+            var mode = applyVoiceFilter ? UnityEngine.Random.Range(0, 3) : -1;
+            return ConvertByteArrayToFloatArray(bytes, mode, senderSampleRate);
+        }
+
+        // voiceFilterMode: -1 = none, 0 = pitch down ×0.5, 1 = pitch up ×1.2, 2 = alien
+        private float[] ConvertByteArrayToFloatArray(byte[] bytes, int voiceFilterMode, int senderSampleRate)
+        {
             var fadeSamples = (int)(senderSampleRate * 0.02f);
             var silencePadding = (int)(senderSampleRate * 0.5f);
             var sampleCount = bytes.Length / 2;
@@ -84,22 +91,12 @@ namespace TFS_Mimics
 
             samples = ApplyLowPassFilter(samples, 4500f);
 
-            if (applyVoiceFilter)
-            {
-                var mode = UnityEngine.Random.Range(0, 3);
-                if (mode == 0)
-                {
-                    samples = ApplyPitchShift(samples, 0.5f);
-                }
-                else if (mode == 1)
-                {
-                    samples = ApplyPitchShift(samples, 1.2f);
-                }
-                else
-                {
-                    samples = ApplyAlienFilter(samples);
-                }
-            }
+            if (voiceFilterMode == 0)
+                samples = ApplyPitchShift(samples, 0.5f);
+            else if (voiceFilterMode == 1)
+                samples = ApplyPitchShift(samples, 1.2f);
+            else if (voiceFilterMode == 2)
+                samples = ApplyAlienFilter(samples);
 
             NormalizeSamples(samples);
 

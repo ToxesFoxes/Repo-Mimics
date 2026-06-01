@@ -125,8 +125,6 @@ namespace TFS_Mimics
 
         private void TryPlayRandomCachedAudio()
         {
-            // In multiplayer, playback is driven by host SyncPlayCommandPacket
-            if (PhotonNetwork.CurrentRoom != null) return;
             var onlinePlayerIds = GetOnlinePlayerIds();
             var playableEntries = cachedAudio
                 .Where(e =>
@@ -865,7 +863,7 @@ namespace TFS_Mimics
             if (voiceEntry != null)
             {
                 foreach (var viewId in packet.EnemyViewIds)
-                    PlayVoiceEntryOnEnemy(voiceEntry, viewId);
+                    PlayVoiceEntryOnEnemy(voiceEntry, viewId, packet.VoiceFilterMode);
                 return;
             }
 
@@ -885,14 +883,12 @@ namespace TFS_Mimics
             DLog($"HandleSyncPlayCommand: no audio found for guid={guid}");
         }
 
-        private void PlayVoiceEntryOnEnemy(CachedAudioEntry entry, int enemyViewId)
+        private void PlayVoiceEntryOnEnemy(CachedAudioEntry entry, int enemyViewId, int voiceFilterMode)
         {
             var enemyGo = GetEnemyGameObjectByViewId(enemyViewId);
             if (enemyGo == null) return;
 
-            var playbackFilterEnabled = Plugin.configPlaybackVoiceFilterEnabled == null || Plugin.configPlaybackVoiceFilterEnabled.Value;
-            var applyVoiceFilter = playbackFilterEnabled && UnityEngine.Random.value > 0.9f;
-            var samples = ConvertByteArrayToFloatArray(entry.AudioData, applyVoiceFilter, entry.SampleRate);
+            var samples = ConvertByteArrayToFloatArray(entry.AudioData, voiceFilterMode, entry.SampleRate);
             var clip = AudioClip.Create("SyncVoiceClip", samples.Length, 1, entry.SampleRate, false);
             clip.SetData(samples, 0);
             PlayClipOnEnemyGameObject(clip, enemyGo, GetVolumeForPlayer(entry.SourcePlayerId));

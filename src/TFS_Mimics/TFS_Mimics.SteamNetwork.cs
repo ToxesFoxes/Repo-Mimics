@@ -101,6 +101,11 @@ namespace TFS_Mimics
         public string SoundGuid { get; set; }
         public int[] EnemyViewIds { get; set; }
         public int HostActorNumber { get; set; }
+        /// <summary>
+        /// Voice filter mode decided by host so all clients apply the same effect.
+        /// -1 = no filter, 0 = pitch down (×0.5), 1 = pitch up (×1.2), 2 = alien.
+        /// </summary>
+        public int VoiceFilterMode { get; set; }
 
         protected override void WriteData(SocketMessage socketMessage)
         {
@@ -109,6 +114,7 @@ namespace TFS_Mimics
             socketMessage.Write(EnemyViewIds?.Length ?? 0);
             foreach (var id in EnemyViewIds ?? System.Array.Empty<int>())
                 socketMessage.Write(id);
+            socketMessage.Write(VoiceFilterMode);
         }
 
         protected override void ReadData(SocketMessage socketMessage)
@@ -118,6 +124,7 @@ namespace TFS_Mimics
             var count = socketMessage.Read<int>();
             EnemyViewIds = new int[count];
             for (var i = 0; i < count; i++) EnemyViewIds[i] = socketMessage.Read<int>();
+            VoiceFilterMode = socketMessage.Read<int>();
         }
     }
 

@@ -16,7 +16,6 @@ namespace TFS_Mimics
             if (_settingMaxFilesBuf == null) _settingMaxFilesBuf = (Plugin.configPersistMaxFilesPerPlayer?.Value ?? 100).ToString();
             if (_settingSamplingRateBuf == null) _settingSamplingRateBuf = (Plugin.configSamplingRate?.Value ?? 48000).ToString();
             if (_settingNormalizeBuf == null) _settingNormalizeBuf = (Plugin.configNormalizeTarget?.Value ?? 85).ToString();
-            if (_settingHostIntervalBuf == null) _settingHostIntervalBuf = $"{(Plugin.configHostAuthorityInterval?.Value ?? 4f):F0}";
 
             _scrollSettings = GUILayout.BeginScrollView(_scrollSettings, GUILayout.Height(scrollH));
 
@@ -40,9 +39,6 @@ namespace TFS_Mimics
 
             DrawSettingSliderInt("Normalize Target", ref _settingNormalizeBuf,
                 Plugin.configNormalizeTarget, 0, 100, "% (0=off)");
-
-            DrawSettingSliderFloat("Host Authority Interval", ref _settingHostIntervalBuf,
-                Plugin.configHostAuthorityInterval, 1f, 30f, "s");
 
             GUILayout.Space(4f);
 

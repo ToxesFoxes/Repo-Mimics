@@ -279,7 +279,7 @@ namespace TFS_Mimics
             var samples = new float[clip.samples * clip.channels];
             if (!clip.GetData(samples, 0)) return;
 
-            NormalizeSamples(samples);
+            AudioFilters.NormalizeSamples(samples);
 
             clip.SetData(samples, 0);
         }

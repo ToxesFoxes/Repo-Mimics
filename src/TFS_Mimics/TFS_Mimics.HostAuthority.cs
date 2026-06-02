@@ -151,9 +151,9 @@ namespace TFS_Mimics
 
             var hostActor = PhotonNetwork.LocalPlayer?.ActorNumber ?? -1;
             var filterEnabled = Plugin.configPlaybackVoiceFilterEnabled == null || Plugin.configPlaybackVoiceFilterEnabled.Value;
-            // Host picks filter mode once; -1 = no filter, 0/1/2 = specific effect
+            // Host picks filter mode once; -1 = no filter, otherwise index into AudioFilters.Registry
             var voiceFilterMode = (filterEnabled && UnityEngine.Random.value > 0.9f)
-                ? UnityEngine.Random.Range(0, 3)
+                ? UnityEngine.Random.Range(0, AudioFilters.Count)
                 : -1;
             var cmd = new SyncPlayCommandPacket
             {

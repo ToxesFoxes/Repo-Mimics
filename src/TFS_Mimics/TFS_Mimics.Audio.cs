@@ -72,11 +72,11 @@ namespace TFS_Mimics
 
         private float[] ConvertByteArrayToFloatArray(byte[] bytes, bool applyVoiceFilter, int senderSampleRate)
         {
-            var mode = applyVoiceFilter ? UnityEngine.Random.Range(0, 5) : -1;
+            var mode = applyVoiceFilter ? UnityEngine.Random.Range(0, AudioFilters.Count) : -1;
             return ConvertByteArrayToFloatArray(bytes, mode, senderSampleRate);
         }
 
-        // voiceFilterMode: -1 = none, 0 = pitch down ×0.5, 1 = pitch up ×1.2, 2 = alien, 3 = teeth (pitch up ×1.25 + tremolo), 4 = slow mouth (pitch down ×0.75)
+        // voiceFilterMode: -1 = none, index into AudioFilters.Registry (see AudioFilters/TFS_Mimics.Audio.FilterRegistry.cs)
         private float[] ConvertByteArrayToFloatArray(byte[] bytes, int voiceFilterMode, int senderSampleRate)
         {
             var fadeSamples = (int)(senderSampleRate * 0.02f);
@@ -89,20 +89,9 @@ namespace TFS_Mimics
                 samples[i] = BitConverter.ToInt16(bytes, i * 2) / 32768f;
             }
 
-            samples = ApplyLowPassFilter(samples, 4500f);
-
-            if (voiceFilterMode == 0)
-                samples = ApplyPitchShift(samples, 0.5f);
-            else if (voiceFilterMode == 1)
-                samples = ApplyPitchShift(samples, 1.2f);
-            else if (voiceFilterMode == 2)
-                samples = ApplyAlienFilter(samples);
-            else if (voiceFilterMode == 3)
-                samples = ApplyTeethBotFilter(samples);
-            else if (voiceFilterMode == 4)
-                samples = ApplySlowMouthFilter(samples);
-
-            NormalizeSamples(samples);
+            samples = AudioFilters.ApplyLowPassFilter(samples, 4500f, sampleRate);
+            samples = AudioFilters.Apply(samples, voiceFilterMode, sampleRate);
+            AudioFilters.NormalizeSamples(samples);
 
             var output = new float[samples.Length + silencePadding * 2];
             for (var i = 0; i < samples.Length; i++)
@@ -121,140 +110,6 @@ namespace TFS_Mimics
             }
 
             return output;
-        }
-
-        // Cubic (Hermite) 4-point resampling pitch shift.
-        // Different approach from linear interpolation: uses surrounding sample context
-        // for smoother results on voiced speech.
-        private static float[] ApplyPitchShift(float[] samples, float pitchFactor)
-        {
-            var newLength = (int)(samples.Length / pitchFactor);
-            var output = new float[newLength];
-
-            for (var i = 0; i < newLength; i++)
-            {
-                var srcPos = i * pitchFactor;
-                var idx = (int)srcPos;
-                var t = srcPos - idx;
-
-                var s0 = idx > 0 ? samples[idx - 1] : samples[0];
-                var s1 = idx < samples.Length ? samples[idx] : 0f;
-                var s2 = idx + 1 < samples.Length ? samples[idx + 1] : 0f;
-                var s3 = idx + 2 < samples.Length ? samples[idx + 2] : 0f;
-
-                // Catmull-Rom spline
-                var a = -0.5f * s0 + 1.5f * s1 - 1.5f * s2 + 0.5f * s3;
-                var b = s0 - 2.5f * s1 + 2f * s2 - 0.5f * s3;
-                var c = -0.5f * s0 + 0.5f * s2;
-                var d = s1;
-                output[i] = Mathf.Clamp(((a * t + b) * t + c) * t + d, -1f, 1f);
-            }
-
-            return output;
-        }
-
-        // Chattering-teeth effect: pitch up ×1.25 (matches ValuableTeethBot.OverridePitch(1.25f))
-        // + tremolo at ~10 Hz to simulate the rapid chattering amplitude variation.
-        private float[] ApplyTeethBotFilter(float[] samples)
-        {
-            // Pitch up matching the in-game OverridePitch value
-            samples = ApplyPitchShift(samples, 1.25f);
-
-            // Tremolo — rapid amplitude chatter at ~10 Hz, depth 0.25
-            const float tremoloRateHz = 10f;
-            const float tremoloDepth = 0.25f;
-            var output = new float[samples.Length];
-            for (var i = 0; i < samples.Length; i++)
-            {
-                var t = i / (float)sampleRate;
-                var lfo = (Mathf.Sin(MathF.PI * 2f * tremoloRateHz * t) + 1f) * 0.5f; // 0..1
-                var gain = 1f - tremoloDepth * lfo;                                    // 0.75..1.0
-                output[i] = Mathf.Clamp(samples[i] * gain, -1f, 1f);
-            }
-            return output;
-        }
-
-        // Slow-mouth effect: pitch down ×0.75 (matches EnemySlowMouth.OverridePitch(0.75f)).
-        // Low-pass at 3000 Hz adds muffled resonance that emphasises the "deep throat" quality.
-        private float[] ApplySlowMouthFilter(float[] samples)
-        {
-            samples = ApplyLowPassFilter(samples, 3000f);
-            return ApplyPitchShift(samples, 0.75f);
-        }
-
-        // Formant-shifting distortion: chorus + bit-crush noise layer.
-        // Produces an alien/uncanny timbre without relying on ring-modulation.
-        private float[] ApplyAlienFilter(float[] samples)
-        {
-            var output = new float[samples.Length];
-
-            // Chorus parameters
-            const float chorusRateHz = 1.3f;
-            const float chorusDepthMs = 8f;
-            const float chorusMix = 0.45f;
-            var maxDelaySamples = (int)(sampleRate * chorusDepthMs / 1000f) + 2;
-            var delayBuf = new float[maxDelaySamples];
-            var writeHead = 0;
-
-            // Bit-crush depth (reduces to ~10-bit)
-            const float crushSteps = 1024f;
-
-            for (var i = 0; i < samples.Length; i++)
-            {
-                var t = i / (float)sampleRate;
-
-                // Modulated delay read position (chorus)
-                var modDepth = (int)(sampleRate * chorusDepthMs / 1000f);
-                var lfo = (Mathf.Sin(MathF.PI * 2f * chorusRateHz * t) + 1f) * 0.5f;
-                var delaySamples = (int)(modDepth * lfo) + 1;
-                var readHead = (writeHead - delaySamples + maxDelaySamples) % maxDelaySamples;
-
-                var dry = samples[i];
-                delayBuf[writeHead] = dry;
-                writeHead = (writeHead + 1) % maxDelaySamples;
-
-                var chorus = delayBuf[readHead];
-
-                // Bit-crush applied to the chorus layer only
-                var crushed = Mathf.Round(chorus * crushSteps) / crushSteps;
-
-                output[i] = Mathf.Clamp(dry * (1f - chorusMix) + crushed * chorusMix, -1f, 1f);
-            }
-
-            return output;
-        }
-
-        private const float NormalizeTarget = 0.85f;   // peak target, 15% headroom — used as fallback only
-
-        /// <summary>
-        /// Peak-normalises a float sample array in-place.
-        /// Scales so the loudest sample reaches the configured target (0-100 → 0.0-1.0).
-        /// Does nothing if target is 0 or the clip is silent.
-        /// </summary>
-        internal static void NormalizeSamples(float[] samples)
-        {
-            if (samples == null || samples.Length == 0) return;
-
-            // 0 = normalization disabled
-            var targetInt = Plugin.configNormalizeTarget != null ? Plugin.configNormalizeTarget.Value : 85;
-            if (targetInt <= 0) return;
-
-            var target = Mathf.Clamp(targetInt / 100f, 0.001f, 1f);
-
-            var peak = 0f;
-            for (var i = 0; i < samples.Length; i++)
-            {
-                var abs = Mathf.Abs(samples[i]);
-                if (abs > peak) peak = abs;
-            }
-
-            if (peak < 0.0001f) return;   // silent
-
-            var scale = target / peak;
-            if (scale >= 1f && peak >= target) return;  // don't over-amplify
-
-            for (var i = 0; i < samples.Length; i++)
-                samples[i] *= scale;
         }
 
         // Writes a WAV file to audio-cache/debug/ when verbose logging is active.
@@ -290,43 +145,5 @@ namespace TFS_Mimics
             }
         }
 
-        // Butterworth 2nd-order low-pass filter (single forward pass, no phase distortion hack).
-        // Coefficients derived from bilinear transform at the given cutoff.
-        private float[] ApplyLowPassFilter(float[] samples, float cutoffFreq)
-        {
-            var output = new float[samples.Length];
-            if (samples.Length == 0)
-            {
-                return output;
-            }
-
-            // Standard bilinear-transform Butterworth 2nd-order LPF.
-            // k = tan(π * fc / fs) is the pre-warped normalised cutoff (small positive value).
-            var fs = sampleRate > 0 ? sampleRate : 48000f;
-            var k = Mathf.Tan(MathF.PI * cutoffFreq / fs);
-            var k2 = k * k;
-            var sqrt2k = MathF.Sqrt(2f) * k;
-            var norm = 1f / (k2 + sqrt2k + 1f);
-
-            var b0 = k2 * norm;
-            var b1 = 2f * k2 * norm;
-            var b2 = k2 * norm;
-            var a1 = 2f * (k2 - 1f) * norm;
-            var a2 = (k2 - sqrt2k + 1f) * norm;
-
-            var x1 = 0f; var x2 = 0f;
-            var y1 = 0f; var y2 = 0f;
-
-            for (var i = 0; i < samples.Length; i++)
-            {
-                var x0 = samples[i];
-                var y0 = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-                x2 = x1; x1 = x0;
-                y2 = y1; y1 = y0;
-                output[i] = Mathf.Clamp(y0, -1f, 1f);
-            }
-
-            return output;
-        }
     }
 }

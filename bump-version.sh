@@ -66,14 +66,6 @@ replace "$MANIFEST" \
   "\"version_number\": \"$CURRENT\"" \
   "\"version_number\": \"$NEW\""
 
-replace "$ROOT_DIR/README.md" \
-  "version-$CURRENT-blue" \
-  "version-$NEW-blue"
-
-replace "$ROOT_DIR/r2modman/README.md" \
-  "version-$CURRENT-blue" \
-  "version-$NEW-blue"
-
 # mm_v2_manifest.json has separate major/minor/patch fields
 MM2="$ROOT_DIR/r2modman/mm_v2_manifest.json"
 tmp=$(mktemp)

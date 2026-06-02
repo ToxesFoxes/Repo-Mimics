@@ -72,11 +72,11 @@ namespace TFS_Mimics
 
         private float[] ConvertByteArrayToFloatArray(byte[] bytes, bool applyVoiceFilter, int senderSampleRate)
         {
-            var mode = applyVoiceFilter ? UnityEngine.Random.Range(0, 3) : -1;
+            var mode = applyVoiceFilter ? UnityEngine.Random.Range(0, 5) : -1;
             return ConvertByteArrayToFloatArray(bytes, mode, senderSampleRate);
         }
 
-        // voiceFilterMode: -1 = none, 0 = pitch down ×0.5, 1 = pitch up ×1.2, 2 = alien
+        // voiceFilterMode: -1 = none, 0 = pitch down ×0.5, 1 = pitch up ×1.2, 2 = alien, 3 = teeth (pitch up ×1.25 + tremolo), 4 = slow mouth (pitch down ×0.75)
         private float[] ConvertByteArrayToFloatArray(byte[] bytes, int voiceFilterMode, int senderSampleRate)
         {
             var fadeSamples = (int)(senderSampleRate * 0.02f);
@@ -97,6 +97,10 @@ namespace TFS_Mimics
                 samples = ApplyPitchShift(samples, 1.2f);
             else if (voiceFilterMode == 2)
                 samples = ApplyAlienFilter(samples);
+            else if (voiceFilterMode == 3)
+                samples = ApplyTeethBotFilter(samples);
+            else if (voiceFilterMode == 4)
+                samples = ApplySlowMouthFilter(samples);
 
             NormalizeSamples(samples);
 
@@ -147,6 +151,35 @@ namespace TFS_Mimics
             }
 
             return output;
+        }
+
+        // Chattering-teeth effect: pitch up ×1.25 (matches ValuableTeethBot.OverridePitch(1.25f))
+        // + tremolo at ~10 Hz to simulate the rapid chattering amplitude variation.
+        private float[] ApplyTeethBotFilter(float[] samples)
+        {
+            // Pitch up matching the in-game OverridePitch value
+            samples = ApplyPitchShift(samples, 1.25f);
+
+            // Tremolo — rapid amplitude chatter at ~10 Hz, depth 0.25
+            const float tremoloRateHz = 10f;
+            const float tremoloDepth = 0.25f;
+            var output = new float[samples.Length];
+            for (var i = 0; i < samples.Length; i++)
+            {
+                var t = i / (float)sampleRate;
+                var lfo = (Mathf.Sin(MathF.PI * 2f * tremoloRateHz * t) + 1f) * 0.5f; // 0..1
+                var gain = 1f - tremoloDepth * lfo;                                    // 0.75..1.0
+                output[i] = Mathf.Clamp(samples[i] * gain, -1f, 1f);
+            }
+            return output;
+        }
+
+        // Slow-mouth effect: pitch down ×0.75 (matches EnemySlowMouth.OverridePitch(0.75f)).
+        // Low-pass at 3000 Hz adds muffled resonance that emphasises the "deep throat" quality.
+        private float[] ApplySlowMouthFilter(float[] samples)
+        {
+            samples = ApplyLowPassFilter(samples, 3000f);
+            return ApplyPitchShift(samples, 0.75f);
         }
 
         // Formant-shifting distortion: chorus + bit-crush noise layer.

@@ -47,8 +47,8 @@ namespace TFS_Mimics
 
             #region Host Only
             configPlaybackNearRadius = /*          */ Config.Bind("Host Only", "Playback Near Radius", /*            */ 15, /*    */ new ConfigDescription("Preferred radius around local player for selecting a mimic playback enemy.", new AcceptableValueRange<int>(5, 100), Array.Empty<object>()));
-            configMinDelay = /*                    */ Config.Bind("Host Only", "MinDelay", /*                        */ 10, /*    */ new ConfigDescription("Minimum delay before record/play.", new AcceptableValueRange<int>(5, 300), Array.Empty<object>()));
-            configMaxDelay = /*                    */ Config.Bind("Host Only", "MaxDelay", /*                        */ 20, /*    */ new ConfigDescription("Maximum delay before record/play.", new AcceptableValueRange<int>(10, 600), Array.Empty<object>()));
+            configMinDelay = /*                    */ Config.Bind("Host Only", "MinDelay", /*                        */ 10, /*    */ new ConfigDescription("Minimum delay before record/play.", new AcceptableValueRange<int>(1, 300), Array.Empty<object>()));
+            configMaxDelay = /*                    */ Config.Bind("Host Only", "MaxDelay", /*                        */ 20, /*    */ new ConfigDescription("Maximum delay before record/play.", new AcceptableValueRange<int>(5, 600), Array.Empty<object>()));
             configPlaybackVoiceFilterEnabled = /*  */ Config.Bind("Host Only", "Playback Voice Filters Enabled", /*  */ true, /*  */ "If false, playback never applies pitch/alien voice filters.");
             #endregion
 

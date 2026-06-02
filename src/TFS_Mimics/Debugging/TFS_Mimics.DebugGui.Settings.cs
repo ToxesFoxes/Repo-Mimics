@@ -174,5 +174,60 @@ namespace TFS_Mimics
                 entry.Value = Mathf.Clamp(v, min, max);
             }
         }
+
+        private void DrawSettingSliderFloat(string label, ref string textBuf, ConfigEntry<float> entry, float min, float max, string unit)
+        {
+            if (entry == null) return;
+            var current = entry.Value;
+
+            GUILayout.BeginVertical(_gsPanelBox);
+
+            GUILayout.BeginHorizontal();
+            GUI.color = CText;
+            GUILayout.Label(label, _gsLabel, GUILayout.Width(200f));
+            GUI.color = Color.white;
+            GUILayout.FlexibleSpace();
+            GUI.SetNextControlName("sf_" + label);
+            textBuf = GUILayout.TextField(textBuf, 6, _gsLabel, GUILayout.Width(60f));
+            if (!string.IsNullOrEmpty(unit))
+            {
+                GUI.color = CTextDim;
+                GUILayout.Label(unit, _gsSmall, GUILayout.ExpandWidth(false));
+                GUI.color = Color.white;
+            }
+            GUILayout.Space(4f);
+            if (GUILayout.Button("Apply", _gsBtn, GUILayout.Width(46f), GUILayout.Height(18f)))
+            {
+                if (float.TryParse(textBuf, out var fv))
+                    entry.Value = Mathf.Clamp(fv, min, max);
+                _settingsDirty = false;
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(2f);
+            var newSlider = GUILayout.HorizontalSlider(current, min, max, GUILayout.ExpandWidth(true), GUILayout.Height(12f));
+            var rounded = Mathf.Round(newSlider);
+            if (!Mathf.Approximately(rounded, current))
+            {
+                entry.Value = Mathf.Clamp(rounded, min, max);
+                textBuf = $"{entry.Value:F0}";
+            }
+
+            GUILayout.BeginHorizontal();
+            GUI.color = CTextDim;
+            GUILayout.Label($"{min:F0}", _gsSmall, GUILayout.ExpandWidth(false));
+            GUILayout.FlexibleSpace();
+            GUI.color = CText;
+            GUILayout.Label($"Current: {current:F1}{(string.IsNullOrEmpty(unit) ? "" : " " + unit)}", _gsSmall, GUILayout.ExpandWidth(false));
+            GUILayout.FlexibleSpace();
+            GUI.color = CTextDim;
+            GUILayout.Label($"{max:F0}", _gsSmall, GUILayout.ExpandWidth(false));
+            GUI.color = Color.white;
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(2f);
+            GUILayout.EndVertical();
+            GUILayout.Space(3f);
+        }
     }
 }

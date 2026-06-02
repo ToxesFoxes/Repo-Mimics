@@ -1,4 +1,3 @@
-using System.Linq;
 using UnityEngine;
 
 namespace TFS_Mimics
@@ -41,9 +40,9 @@ namespace TFS_Mimics
 
         private void DrawVoiceLogTab(float scrollH)
         {
-            var inEntries = _voiceLog.Where(e => e.IsIncoming).ToList();
-            var outEntries = _voiceLog.Where(e => !e.IsIncoming).ToList();
-            var inProgress = _voiceLog.Count(e => !e.IsComplete);
+            var inEntries = _cachedVoiceLogIn;
+            var outEntries = _cachedVoiceLogOut;
+            var inProgress = _cachedVoiceLogInProgress;
 
             GUILayout.BeginHorizontal();
             GUI.color = CTextDim;
@@ -178,6 +177,19 @@ namespace TFS_Mimics
             GUI.DrawTexture(fillRect, _txWhite);
 
             GUI.color = prevColor;
+        }
+
+        private void RebuildVoiceLogCache()
+        {
+            _cachedVoiceLogIn.Clear();
+            _cachedVoiceLogOut.Clear();
+            _cachedVoiceLogInProgress = 0;
+            foreach (var e in _voiceLog)
+            {
+                if (e.IsIncoming) _cachedVoiceLogIn.Add(e);
+                else _cachedVoiceLogOut.Add(e);
+                if (!e.IsComplete) _cachedVoiceLogInProgress++;
+            }
         }
     }
 }

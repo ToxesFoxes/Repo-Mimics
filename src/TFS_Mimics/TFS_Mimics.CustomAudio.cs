@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using BepInEx;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -23,6 +24,10 @@ namespace TFS_Mimics
             /// </summary>
             public string SourceMod;  // null = custom-audio folder; set = API-registered
             public bool IsNormalized;
+            /// <summary>Stable content-addressed ID used for host-authority synchronization.</summary>
+            public string SoundGuid;  // "fs:<md5>" or "api:<modGuid>:<md5>"
+            /// <summary>MD5 hex of raw file bytes (folder) or PCM floats (API). Used for cross-reference on host.</summary>
+            public string ContentHash;
         }
 
         // ─── State ───────────────────────────────────────────────────────────────
@@ -72,6 +77,13 @@ namespace TFS_Mimics
             {
                 if (clip == null) continue;
 
+                var pcm = new float[clip.samples * clip.channels];
+                clip.GetData(pcm, 0);
+                var pcmBytes = new byte[pcm.Length * 4];
+                Buffer.BlockCopy(pcm, 0, pcmBytes, 0, pcmBytes.Length);
+                var contentHash = ComputeMd5Hex(pcmBytes);
+                var soundGuid = "api:" + modGuid + ":" + contentHash;
+
                 _customAudioClips.Add(new CustomAudioEntry
                 {
                     Clip = clip,
@@ -79,10 +91,14 @@ namespace TFS_Mimics
                     FilePath = null,
                     SourceMod = displayName,
                     IsNormalized = false,
+                    SoundGuid = soundGuid,
+                    ContentHash = contentHash,
                 });
 
-                Log.LogInfo($"[Mimics] API: registered clip '{clip.name}' from mod '{displayName}' (guid={modGuid})");
+                Log.LogInfo($"[Mimics] API: registered clip '{clip.name}' from mod '{displayName}' (guid={modGuid}) soundGuid={soundGuid}");
             }
+
+            RegisterCustomSoundsWithHost();
         }
 
         // ─── Coroutine loader ─────────────────────────────────────────────────────
@@ -134,6 +150,18 @@ namespace TFS_Mimics
                         continue;
                     }
 
+                    string contentHash;
+                    try
+                    {
+                        contentHash = ComputeMd5Hex(File.ReadAllBytes(filePath));
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.LogWarning($"[Mimics] Custom audio: failed to hash '{Path.GetFileName(filePath)}': {ex.Message}");
+                        contentHash = Path.GetFileNameWithoutExtension(filePath).ToLowerInvariant();
+                    }
+                    var soundGuid = "fs:" + contentHash;
+
                     clip.name = Path.GetFileNameWithoutExtension(filePath);
                     _customAudioClips.Add(new CustomAudioEntry
                     {
@@ -142,9 +170,11 @@ namespace TFS_Mimics
                         FilePath = filePath,
                         SourceMod = null,   // folder-loaded
                         IsNormalized = false,
+                        SoundGuid = soundGuid,
+                        ContentHash = contentHash,
                     });
                     loaded++;
-                    DLog($"CustomAudio: loaded '{clip.name}' length={clip.length:F1}s freq={clip.frequency}Hz channels={clip.channels}");
+                    DLog($"CustomAudio: loaded '{clip.name}' length={clip.length:F1}s soundGuid={soundGuid}");
                 }
             }
 
@@ -152,6 +182,8 @@ namespace TFS_Mimics
 
             // Consume any clips that were registered via MimicsAPI before or during loading.
             ConsumeApiClips();
+
+            RegisterCustomSoundsWithHost();
         }
 
         // ─── Playback ─────────────────────────────────────────────────────────────
@@ -240,9 +272,6 @@ namespace TFS_Mimics
             DLog($"PlayCustomAudioEntry: playing '{entry.FileName}' length={entry.Clip.length:F1}s on '{selected.EnemyName}' dist={selected.Distance:F1} {DebugContext()}");
         }
         // ─── Normalization ────────────────────────────────────────────────────────
-        /// <summary>
-        /// Reads all samples from the clip, runs shared peak-normalization, then writes back.
-        /// </summary>
         private static void NormalizeClip(AudioClip clip)
         {
             if (clip == null) return;
@@ -253,6 +282,16 @@ namespace TFS_Mimics
             NormalizeSamples(samples);
 
             clip.SetData(samples, 0);
+        }
+
+        // ─── Hashing ─────────────────────────────────────────────────────────────
+        internal static string ComputeMd5Hex(byte[] data)
+        {
+            using (var md5 = MD5.Create())
+            {
+                var hash = md5.ComputeHash(data);
+                return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+            }
         }
     }
 }

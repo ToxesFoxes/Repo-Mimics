@@ -39,8 +39,29 @@ namespace TFS_Mimics
         private string _settingNormalizeBuf;
         private bool _settingsDirty;
         private Vector2 _scrollSettings;
+        private Vector2 _scrollReadiness;
         // Per-player volume slider text buffers (keyed by persistent player ID)
         private readonly Dictionary<string, string> _playerVolBuf = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // ─── Tab Data Caches ──────────────────────────────────────────────────────
+        private float _tabCacheNextRebuild;
+        private const float TabCacheInterval = 0.25f;
+
+        // Players tab
+        private readonly List<(string pid, string name, int count)> _cachedPlayersSorted = new List<(string pid, string name, int count)>();
+        private readonly HashSet<string> _cachedPlayersOnlineIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private string _cachedPlayersLocalId = string.Empty;
+        private int _cachedPlayersWithClips;
+
+        // VoiceLog tab
+        private readonly List<VoiceLogEntry> _cachedVoiceLogIn = new List<VoiceLogEntry>();
+        private readonly List<VoiceLogEntry> _cachedVoiceLogOut = new List<VoiceLogEntry>();
+        private int _cachedVoiceLogInProgress;
+
+        // Cache tab
+        private readonly List<(string pid, string name, List<int> indices, float lastAt)> _cachedCacheTabSorted = new List<(string pid, string name, List<int> indices, float lastAt)>();
+        private int _cachedCacheTabEligibleCount;
+        private readonly Dictionary<string, bool> _cachedReadinessEligible = new Dictionary<string, bool>();
 
         // ─── Force-Play Modal State ──────────────────────────────────────────────
         private bool _fpmOpen;
@@ -182,6 +203,17 @@ namespace TFS_Mimics
             {
                 hudNextRefreshAt = Time.time + 0.25f;
                 RefreshHudTargetsSnapshot();
+            }
+
+            if (_debugTab == 1)
+            {
+                RebuildAvatarMapIfNeeded();
+            }
+
+            if (Time.time >= _tabCacheNextRebuild)
+            {
+                _tabCacheNextRebuild = Time.time + TabCacheInterval;
+                RebuildActiveTabCache();
             }
 
             if (_showGizmos)

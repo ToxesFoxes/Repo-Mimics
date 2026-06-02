@@ -3,7 +3,6 @@
 [![Thunderstore](https://img.shields.io/thunderstore/v/ToxesFoxes/Mimics?logo=thunderstore&logoColor=white&label=Thunderstore)](https://thunderstore.io/c/repo/p/ToxesFoxes/Mimics/)
 [![Thunderstore Downloads](https://img.shields.io/thunderstore/dt/ToxesFoxes/Mimics?logo=thunderstore&logoColor=white&label=Downloads)](https://thunderstore.io/c/repo/p/ToxesFoxes/Mimics/)
 [![GitHub Release](https://img.shields.io/github/v/release/ToxesFoxes/Repo-Mimics?label=GitHub%20Release&color=green)](https://github.com/ToxesFoxes/Repo-Mimics/releases)
-![Version](https://img.shields.io/badge/Current%20Version-1.1.0-blue)
 
 Mimics adds a voice-mimic mechanic to monsters in R.E.P.O.
 They can replay random phrases recorded during gameplay, making it harder to trust what you hear.

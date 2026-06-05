@@ -23,6 +23,12 @@ namespace TFS_Mimics
             var senderName = sender != null ? sender.NickName : "unknown";
             var tx = string.IsNullOrWhiteSpace(transmissionId) ? "legacy" : transmissionId;
 
+            if (senderActor == PhotonNetwork.LocalPlayer.ActorNumber)
+            {
+                // We already saved this clip locally in SendAudioInChunks
+                return;
+            }
+
             CleanupStaleIncomingTransmissions();
 
             if (chunk == null || totalChunks <= 0 || chunkIndex < 0 || chunkIndex >= totalChunks)
@@ -89,7 +95,7 @@ namespace TFS_Mimics
                 ReceivedAt = Time.time,
                 SoundGuid = tx
             };
-            cachedAudio.Add(entry);
+            AddToAudioCache(entry);
 
             // Notify host that this client now has this sound
             NotifyHostSoundReady(tx);

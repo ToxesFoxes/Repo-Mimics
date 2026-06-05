@@ -366,7 +366,7 @@ namespace TFS_Mimics
                 ReceivedAt = Time.time,
                 SoundGuid = transmissionId
             };
-            cachedAudio.Add(selfEntry);
+            AddToAudioCache(selfEntry);
             NotifyHostSoundReady(transmissionId);
 
             _isSendingAudio = false;

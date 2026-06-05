@@ -102,6 +102,20 @@ namespace TFS_Mimics
         private readonly Dictionary<int, float> playbackClipLengthByTargetKey = new Dictionary<int, float>();
         // Static: survives component destruction between levels (PlayerAvatar is recreated per-level)
         private static readonly List<CachedAudioEntry> cachedAudio = new List<CachedAudioEntry>();
+
+        private static void AddToAudioCache(CachedAudioEntry entry)
+        {
+            if (entry == null) return;
+            if (!string.IsNullOrEmpty(entry.SoundGuid))
+            {
+                if (cachedAudio.Any(e => e.SoundGuid == entry.SoundGuid))
+                {
+                    return;
+                }
+            }
+            cachedAudio.Add(entry);
+        }
+
         private string currentPlaybackEnemyName = "None";
         private string currentPlaybackSourcePlayerId = "None";
         private float currentPlaybackEndsAt;

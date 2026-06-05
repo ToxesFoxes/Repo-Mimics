@@ -57,7 +57,7 @@ namespace TFS_Mimics
                     continue;
                 }
 
-                cachedAudio.Add(entry);
+                AddToAudioCache(entry);
                 RegisterPlayerInIndex(entry.SourcePlayerId, entry.SourceName);
                 loadedPersistedFiles.Add(file);
                 loaded++;

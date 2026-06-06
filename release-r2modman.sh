@@ -14,7 +14,7 @@ if [[ -z "$VERSION" ]]; then
   exit 1
 fi
 
-OUT_ZIP="$ROOT_DIR/Release-r2modman-$VERSION.zip"
+OUT_ZIP="$ROOT_DIR/ToxesFoxes-ToxesFoxes_Mimics-$VERSION.zip"
 
 # ── 1. Build ──────────────────────────────────────────────────────────────────
 echo "[1/4] Building v$VERSION ($CONFIGURATION)..."
@@ -35,7 +35,7 @@ echo "[3/4] Copying README.md (stripping Thunderstore badge)..."
 grep -v 'img.shields.io/badge/Thunderstore' "$ROOT_DIR/README.md" > "$R2DIR/README.md"
 
 # ── 4. Pack zip ──────────────────────────────────────────────────────────────
-echo "[4/4] Packing Release-r2modman-$VERSION.zip..."
+echo "[4/4] Packing ToxesFoxes-ToxesFoxes_Mimics-$VERSION.zip..."
 rm -f "$OUT_ZIP"
 
 # Convert paths to Windows style for PowerShell

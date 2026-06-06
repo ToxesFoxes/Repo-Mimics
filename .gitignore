@@ -402,6 +402,7 @@ FodyWeavers.xsd
 r2modman/*.dll
 r2modman/*.md
 Release-r2modman-*.zip
+ToxesFoxes-ToxesFoxes_Mimics-*.zip
 
 # Local MSBuild-config files
 Directory.Build.props.local

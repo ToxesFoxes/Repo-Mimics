@@ -102,6 +102,20 @@ namespace TFS_Mimics
         private readonly Dictionary<int, float> playbackClipLengthByTargetKey = new Dictionary<int, float>();
         // Static: survives component destruction between levels (PlayerAvatar is recreated per-level)
         private static readonly List<CachedAudioEntry> cachedAudio = new List<CachedAudioEntry>();
+
+        private static void AddToAudioCache(CachedAudioEntry entry)
+        {
+            if (entry == null) return;
+            if (!string.IsNullOrEmpty(entry.SoundGuid))
+            {
+                if (cachedAudio.Any(e => e.SoundGuid == entry.SoundGuid))
+                {
+                    return;
+                }
+            }
+            cachedAudio.Add(entry);
+        }
+
         private string currentPlaybackEnemyName = "None";
         private string currentPlaybackSourcePlayerId = "None";
         private float currentPlaybackEndsAt;
@@ -236,16 +250,9 @@ namespace TFS_Mimics
             StartCoroutine(InitializeVoiceChat(avatar));
         }
 
-        // Finds PlayerVoiceChat via component search first, then falls back to reflection.
-        // Avoids storing a FieldInfo member whose sole purpose mirrors the original mod's approach.
         private IEnumerator InitializeVoiceChat(PlayerAvatar avatar)
         {
-            // Direct component search — works if PlayerVoiceChat is on this or a child object.
-            playerVoiceChat = GetComponentInChildren<PlayerVoiceChat>(true);
-            if (playerVoiceChat == null)
-            {
-                playerVoiceChat = GetComponentInParent<PlayerVoiceChat>();
-            }
+            playerVoiceChat = GetComponentInChildren<PlayerVoiceChat>(true) ?? GetComponentInParent<PlayerVoiceChat>();
 
             if (playerVoiceChat == null)
             {

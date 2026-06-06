@@ -52,6 +52,7 @@ namespace TFS_Mimics
         private readonly HashSet<string> _cachedPlayersOnlineIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private string _cachedPlayersLocalId = string.Empty;
         private int _cachedPlayersWithClips;
+        private int _playersPage;
 
         // VoiceLog tab
         private readonly List<VoiceLogEntry> _cachedVoiceLogIn = new List<VoiceLogEntry>();
@@ -62,6 +63,8 @@ namespace TFS_Mimics
         private readonly List<(string pid, string name, List<int> indices, float lastAt)> _cachedCacheTabSorted = new List<(string pid, string name, List<int> indices, float lastAt)>();
         private int _cachedCacheTabEligibleCount;
         private readonly Dictionary<string, bool> _cachedReadinessEligible = new Dictionary<string, bool>();
+        private int _cachePage;
+        private readonly Dictionary<string, int> _cachePlayerPages = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         // ─── Force-Play Modal State ──────────────────────────────────────────────
         private bool _fpmOpen;
@@ -69,8 +72,10 @@ namespace TFS_Mimics
         private int _fpmPlayerIdx;  // -1 = Random
         private int _fpmClipIdx;    // -1 = Random within player
         private int _fpmEnemyIdx;   // -1 = Nearest
+        private int _fpmFilterIdx = -1; // -1 = Random/Default
         private bool _fpmHearYourself;
-        private Vector2 _fpmScrollPlayer, _fpmScrollClip, _fpmScrollEnemy;
+        private Vector2 _fpmScrollPlayer, _fpmScrollClip, _fpmScrollEnemy, _fpmScrollFilter;
+        private int _fpmPagePlayer, _fpmPageClip, _fpmPageEnemy, _fpmPageFilter;
         private List<FpmPlayerEntry> _fpmPlayers;
         private List<FpmEnemyEntry> _fpmEnemies;
 
@@ -157,17 +162,18 @@ namespace TFS_Mimics
 
         private void DebugGuiUpdate()
         {
-            if (Input.GetKeyDown(KeyCode.F8))
+            var menuKey = Plugin.GetDebugMenuKey();
+            if (Input.GetKeyDown(menuKey))
             {
                 var shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
                 if (shift && _debugWindowOpen)
                 {
-                    // Shift+F8 — переключить фокус (вернуть курсор игре), окно остаётся видимым
+                    // Shift+Key — переключить фокус (вернуть курсор игре), окно остаётся видимым
                     _debugWindowFocused = !_debugWindowFocused;
                 }
                 else
                 {
-                    // F8 — переключить окно
+                    // Key — переключить окно
                     _debugWindowOpen = !_debugWindowOpen;
                     _debugWindowFocused = _debugWindowOpen;
                     if (_debugWindowOpen)
@@ -306,7 +312,7 @@ namespace TFS_Mimics
 
         private void DrawMainWindow(int id)
         {
-            DrawWindowTitleBar("MIMICS  DEBUG", "[F8]");
+            DrawWindowTitleBar("MIMICS  DEBUG", $"[{Plugin.configDebugMenuKey.Value}]");
             GUILayout.Space(4f);
             DrawPlaybackHeader();
             GUILayout.Space(4f);

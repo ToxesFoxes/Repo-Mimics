@@ -1,3 +1,4 @@
+using System;
 using BepInEx.Configuration;
 using UnityEngine;
 
@@ -63,6 +64,7 @@ namespace TFS_Mimics
             // ── Debug ──────────────────────────────────────────────────────────
             DrawSettingsSection("Debug");
 
+            DrawSettingKeybind("Menu Keybind", Plugin.configDebugMenuKey);
             DrawSettingToggle("Verbose Logging", Plugin.configDebugVerbose);
 
             GUILayout.Space(8f);
@@ -104,6 +106,27 @@ namespace TFS_Mimics
             if (after != before)
             {
                 entry.Value = after;
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Space(2f);
+        }
+
+        private void DrawSettingKeybind(string label, ConfigEntry<string> entry)
+        {
+            if (entry == null) return;
+            GUILayout.BeginHorizontal(_gsPanelBox);
+            GUI.color = CText;
+            GUILayout.Label(label, _gsLabel, GUILayout.Width(200f));
+            GUI.color = Color.white;
+            GUILayout.FlexibleSpace();
+
+            var current = entry.Value;
+            if (GUILayout.Button(current, _gsBtn, GUILayout.MinHeight(18f), GUILayout.Width(80f)))
+            {
+                var idx = Array.IndexOf(Plugin.AvailableKeybinds, current);
+                if (idx < 0) idx = 0;
+                idx = (idx + 1) % Plugin.AvailableKeybinds.Length;
+                entry.Value = Plugin.AvailableKeybinds[idx];
             }
             GUILayout.EndHorizontal();
             GUILayout.Space(2f);

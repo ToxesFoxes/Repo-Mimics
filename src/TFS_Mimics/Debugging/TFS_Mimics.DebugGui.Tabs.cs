@@ -250,6 +250,26 @@ namespace TFS_Mimics
             GUILayout.EndHorizontal();
             GUILayout.Space(3f);
 
+            const int playersPerPage = 15;
+            var totalPages = Mathf.Max(1, Mathf.CeilToInt(_cachedPlayersSorted.Count / (float)playersPerPage));
+            _playersPage = Mathf.Clamp(_playersPage, 0, totalPages - 1);
+
+            if (totalPages > 1)
+            {
+                GUILayout.BeginHorizontal();
+                GUI.enabled = _playersPage > 0;
+                if (GUILayout.Button("◀", _gsBtn, GUILayout.Width(30f), GUILayout.Height(20f))) _playersPage--;
+                GUI.enabled = true;
+                GUILayout.FlexibleSpace();
+                GUILayout.Label($"Page {_playersPage + 1} / {totalPages}", _gsSmall);
+                GUILayout.FlexibleSpace();
+                GUI.enabled = _playersPage < totalPages - 1;
+                if (GUILayout.Button("▶", _gsBtn, GUILayout.Width(30f), GUILayout.Height(20f))) _playersPage++;
+                GUI.enabled = true;
+                GUILayout.EndHorizontal();
+                GUILayout.Space(2f);
+            }
+
             _scrollPlayers = GUILayout.BeginScrollView(_scrollPlayers, GUILayout.Height(scrollH));
 
             if (_cachedPlayersSorted.Count == 0)
@@ -259,8 +279,12 @@ namespace TFS_Mimics
                 GUI.color = Color.white;
             }
 
-            foreach (var (pid, pname, count) in _cachedPlayersSorted)
+            var startIdx = _playersPage * playersPerPage;
+            var endIdx = Mathf.Min(startIdx + playersPerPage, _cachedPlayersSorted.Count);
+
+            for (var i = startIdx; i < endIdx; i++)
             {
+                var (pid, pname, count) = _cachedPlayersSorted[i];
                 var isOnline = _cachedPlayersOnlineIds.Contains(pid);
                 var isLocal = string.Equals(pid, _cachedPlayersLocalId, System.StringComparison.OrdinalIgnoreCase);
                 _avatarMapCache.TryGetValue(pid, out var rowAvatar);
@@ -429,12 +453,35 @@ namespace TFS_Mimics
             {
                 cachedAudio.Clear();
                 _cacheExpandedPlayers.Clear();
+                _cachePage = 0;
+                _cachePlayerPages.Clear();
                 DLog($"Debug HUD: cache manually cleared {DebugContext()}");
             }
             GUILayout.EndHorizontal();
             GUILayout.Space(3f);
 
             var sorted = _cachedCacheTabSorted;
+
+            // ── Pagination for Players ──────────────────────────────────────────
+            const int playersPerPage = 10;
+            var totalPlayerPages = Mathf.Max(1, Mathf.CeilToInt(sorted.Count / (float)playersPerPage));
+            _cachePage = Mathf.Clamp(_cachePage, 0, totalPlayerPages - 1);
+
+            if (totalPlayerPages > 1)
+            {
+                GUILayout.BeginHorizontal();
+                GUI.enabled = _cachePage > 0;
+                if (GUILayout.Button("◀", _gsBtn, GUILayout.Width(30f), GUILayout.Height(20f))) _cachePage--;
+                GUI.enabled = true;
+                GUILayout.FlexibleSpace();
+                GUILayout.Label($"Players Page {_cachePage + 1} / {totalPlayerPages}", _gsSmall);
+                GUILayout.FlexibleSpace();
+                GUI.enabled = _cachePage < totalPlayerPages - 1;
+                if (GUILayout.Button("▶", _gsBtn, GUILayout.Width(30f), GUILayout.Height(20f))) _cachePage++;
+                GUI.enabled = true;
+                GUILayout.EndHorizontal();
+                GUILayout.Space(2f);
+            }
 
             _scrollCache = GUILayout.BeginScrollView(_scrollCache, GUILayout.Height(scrollH));
 
@@ -493,7 +540,31 @@ namespace TFS_Mimics
                     }
                     else
                     {
-                        for (var ci = 0; ci < customClips.Count; ci++)
+                        // Custom audio pagination too
+                        const int customPerPage = 15;
+                        if (!_cachePlayerPages.TryGetValue("__custom__", out var cp)) cp = 0;
+                        var totalCustomPages = Mathf.Max(1, Mathf.CeilToInt(customClips.Count / (float)customPerPage));
+                        cp = Mathf.Clamp(cp, 0, totalCustomPages - 1);
+                        _cachePlayerPages["__custom__"] = cp;
+
+                        if (totalCustomPages > 1)
+                        {
+                            GUILayout.BeginHorizontal();
+                            GUILayout.Space(26f);
+                            GUI.enabled = cp > 0;
+                            if (GUILayout.Button("◀", _gsBtn, GUILayout.Width(24f), GUILayout.Height(18f))) _cachePlayerPages["__custom__"]--;
+                            GUI.enabled = true;
+                            GUILayout.Label($"Files Page {cp + 1}/{totalCustomPages}", _gsSmall, GUILayout.ExpandWidth(true));
+                            GUI.enabled = cp < totalCustomPages - 1;
+                            if (GUILayout.Button("▶", _gsBtn, GUILayout.Width(24f), GUILayout.Height(18f))) _cachePlayerPages["__custom__"]++;
+                            GUI.enabled = true;
+                            GUILayout.EndHorizontal();
+                        }
+
+                        var startCustom = cp * customPerPage;
+                        var endCustom = Mathf.Min(startCustom + customPerPage, customClips.Count);
+
+                        for (var ci = startCustom; ci < endCustom; ci++)
                         {
                             var ce = customClips[ci];
                             if (ce?.Clip == null) continue;
@@ -552,8 +623,12 @@ namespace TFS_Mimics
                 GUI.color = Color.white;
             }
 
-            foreach (var (pid, pname, indices, lastAt) in sorted)
+            var startPlayerIdx = _cachePage * playersPerPage;
+            var endPlayerIdx = Mathf.Min(startPlayerIdx + playersPerPage, sorted.Count);
+
+            for (var i = startPlayerIdx; i < endPlayerIdx; i++)
             {
+                var (pid, pname, indices, lastAt) = sorted[i];
                 var age = Time.time - lastAt;
                 var ageStr = age < 60f ? $"{age:F0}s ago" : $"{age / 60f:F1}m ago";
                 var isExpanded = _cacheExpandedPlayers.Contains(pid);
@@ -563,7 +638,7 @@ namespace TFS_Mimics
                 GUILayout.BeginVertical(_gsPanelBox);
                 GUILayout.BeginHorizontal();
 
-                // Expand/collapse button — sits outside the panel background edge
+                // Expand/collapse button坐s sits outside the panel background edge
                 GUI.color = CAccentDim;
                 if (GUILayout.Button(chevron, _gsBtn, GUILayout.Width(22f), GUILayout.Height(20f)))
                 {
@@ -660,9 +735,34 @@ namespace TFS_Mimics
                     GUI.color = Color.white;
                     GUILayout.Space(2f);
 
-                    for (var ci = 0; ci < indices.Count; ci++)
+                    // Pagination for clips within player
+                    const int clipsPerPage = 10;
+                    if (!_cachePlayerPages.TryGetValue(pid, out var pcp)) pcp = 0;
+                    var totalClipPages = Mathf.Max(1, Mathf.CeilToInt(indices.Count / (float)clipsPerPage));
+                    pcp = Mathf.Clamp(pcp, 0, totalClipPages - 1);
+                    _cachePlayerPages[pid] = pcp;
+
+                    if (totalClipPages > 1)
                     {
-                        var idx = indices[ci];
+                        GUILayout.BeginHorizontal();
+                        GUILayout.Space(26f);
+                        GUI.enabled = pcp > 0;
+                        if (GUILayout.Button("◀", _gsBtn, GUILayout.Width(24f), GUILayout.Height(18f))) _cachePlayerPages[pid]--;
+                        GUI.enabled = true;
+                        GUILayout.Label($"Clips Page {pcp + 1}/{totalClipPages}", _gsSmall, GUILayout.ExpandWidth(true));
+                        GUI.enabled = pcp < totalClipPages - 1;
+                        if (GUILayout.Button("▶", _gsBtn, GUILayout.Width(24f), GUILayout.Height(18f))) _cachePlayerPages[pid]++;
+                        GUI.enabled = true;
+                        GUILayout.EndHorizontal();
+                    }
+
+                    var startClip = pcp * clipsPerPage;
+                    var endClip = Mathf.Min(startClip + clipsPerPage, indices.Count);
+
+                    for (var ci = 0; ci < endClip - startClip; ci++)
+                    {
+                        var reverseIdx = indices.Count - 1 - (startClip + ci);
+                        var idx = indices[reverseIdx];
                         if (idx < 0 || idx >= cachedAudio.Count) continue;
                         var entry = cachedAudio[idx];
                         if (entry == null) continue;
@@ -787,8 +887,18 @@ namespace TFS_Mimics
                 return;
             }
 
-            DLog($"PlayCacheEntryOnNearest: playing on {nearest.EnemyName} dist={nearest.Distance:F1}m {DebugContext()}");
-            PlayReceivedAudioOnTarget(entry, nearest.Enemy, nearest.Target);
+            var viewId = GetEnemyNetViewId(nearest.Enemy);
+            if (viewId < 0)
+            {
+                DLog($"PlayCacheEntryOnNearest: nearest enemy has no ViewID {DebugContext()}");
+                return;
+            }
+
+            DLog($"PlayCacheEntryOnNearest: playing on {nearest.EnemyName} {DebugContext()}");
+
+            // Use Host Authority Tick logic to synchronize playback
+            // Pass -2 to use the default host-side random filter selection
+            HostAuthorityTick(entry.SoundGuid, new int[] { viewId }, -2);
         }
 
         // ─── Tab Cache Rebuild ────────────────────────────────────────────────────
@@ -875,7 +985,7 @@ namespace TFS_Mimics
             }
 
             _cachedCacheTabSorted.Clear();
-            foreach (var kv in byPlayer.OrderByDescending(kv => kv.Value.indices.Count))
+            foreach (var kv in byPlayer.OrderByDescending(kv => kv.Value.lastAt))
                 _cachedCacheTabSorted.Add((kv.Key, kv.Value.name, kv.Value.indices, kv.Value.lastAt));
         }
     }

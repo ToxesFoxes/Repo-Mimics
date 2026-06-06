@@ -9,7 +9,7 @@ using RepoSteamNetworking.API;
 
 namespace TFS_Mimics
 {
-    [BepInPlugin("TFS_Mimics", "TFS_Mimics", "1.1.2")]
+    [BepInPlugin("TFS_Mimics", "TFS_Mimics", "1.1.3")]
     [BepInDependency("com.rune580.reposteamnetworking")]
     public class Plugin : BaseUnityPlugin
     {
@@ -17,6 +17,7 @@ namespace TFS_Mimics
         private static Harmony harmony;
 
         public static ConfigEntry<bool> configDebugVerbose;
+        public static ConfigEntry<string> configDebugMenuKey;
         public static ConfigEntry<int> configVoiceVolume;
         public static ConfigEntry<int> configPlaybackNearRadius;
         public static ConfigEntry<int> configMinDelay;
@@ -28,8 +29,31 @@ namespace TFS_Mimics
         public static ConfigEntry<bool> configPersistAudioCache;
         public static ConfigEntry<int> configPersistMaxFilesPerPlayer;
         public static ConfigEntry<int> configNormalizeTarget;
-
+        internal static readonly string[] AvailableKeybinds = [
+            "A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
+            "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
+            "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3",
+            "4", "5", "6", "7", "8", "9", "F1", "F2", "F3", "F4",
+            "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "Space", "Return",
+            "Tab", "LeftShift", "RightShift", "LeftControl", "RightControl",
+            "Alpha0", "Alpha1", "Alpha2", "Alpha3", "Alpha4", "Alpha5", "Alpha6", "Alpha7", "Alpha8", "Alpha9"
+        ];
         public static readonly Dictionary<string, ConfigEntry<bool>> enemyConfigEntries = new Dictionary<string, ConfigEntry<bool>>();
+
+        public static UnityEngine.KeyCode GetDebugMenuKey()
+        {
+            var val = configDebugMenuKey.Value;
+
+            // Handle legacy or user-friendly names
+            if (val == "Enter") return UnityEngine.KeyCode.Return;
+            if (val.Length == 1 && char.IsDigit(val[0]))
+            {
+                if (Enum.TryParse<UnityEngine.KeyCode>("Alpha" + val, out var alphaKey)) return alphaKey;
+            }
+
+            if (Enum.TryParse<UnityEngine.KeyCode>(val, out var key)) return key;
+            return UnityEngine.KeyCode.F8;
+        }
 
         private void Awake()
         {
@@ -52,9 +76,9 @@ namespace TFS_Mimics
             configPlaybackVoiceFilterEnabled = /*  */ Config.Bind("Host Only", "Playback Voice Filters Enabled", /*  */ true, /*  */ "If false, playback never applies pitch/alien voice filters.");
             #endregion
 
-            configDebugVerbose = /*                */ Config.Bind("Debug", "Verbose Logging", /*                 */ false, /**/ "Enable very detailed debug logs for the whole mimic pipeline.");
-
-            configSamplingRate = /*                */ Config.Bind("Experimental", "Sampling Rate", 48000, new ConfigDescription("Microphone/sample rate.", new AcceptableValueRange<int>(16000, 48000), Array.Empty<object>()));
+            configDebugVerbose = /*                */ Config.Bind("Debug", "Verbose Logging", /*                 */ false, /* */ "Enable very detailed debug logs for the whole mimic pipeline.");
+            configDebugMenuKey = /*                */ Config.Bind("Debug", "Menu Keybind", /*                    */ "F8", /*  */ new ConfigDescription("Keybind to open the Mimics debug menu in-game.", new AcceptableValueList<string>(AvailableKeybinds), Array.Empty<object>()));
+            configSamplingRate = /*                */ Config.Bind("Experimental", "Sampling Rate", /*            */ 48000, /* */ new ConfigDescription("Microphone/sample rate.", new AcceptableValueRange<int>(16000, 48000), Array.Empty<object>()));
 
             configFilterEnabled = /*               */ Config.Bind("Filter", "Filter Enabled?", false, "Enable per-enemy mimic filter.");
 

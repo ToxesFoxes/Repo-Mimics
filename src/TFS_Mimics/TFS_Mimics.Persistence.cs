@@ -57,7 +57,7 @@ namespace TFS_Mimics
                     continue;
                 }
 
-                cachedAudio.Add(entry);
+                AddToAudioCache(entry);
                 RegisterPlayerInIndex(entry.SourcePlayerId, entry.SourceName);
                 loadedPersistedFiles.Add(file);
                 loaded++;
@@ -267,7 +267,7 @@ namespace TFS_Mimics
         {
             public string id;
             public string name;
-            public int    volumeOverride = -1;  // -1 = unset
+            public int volumeOverride = -1;  // -1 = unset
         }
 
         private static List<PlayerJsonEntry> ParsePlayersJson(string json)
@@ -285,9 +285,9 @@ namespace TFS_Mimics
                 if (cb < 0) break;
                 var obj = json.Substring(ob + 1, cb - ob - 1);
                 var entry = new PlayerJsonEntry();
-                entry.id             = ExtractJsonString(obj, "id");
-                entry.name           = ExtractJsonString(obj, "name");
-                var volStr           = ExtractJsonString(obj, "volumeOverride");
+                entry.id = ExtractJsonString(obj, "id");
+                entry.name = ExtractJsonString(obj, "name");
+                var volStr = ExtractJsonString(obj, "volumeOverride");
                 if (int.TryParse(volStr, out var vol)) entry.volumeOverride = vol;
                 if (!string.IsNullOrWhiteSpace(entry.id))
                     result.Add(entry);
@@ -418,41 +418,20 @@ namespace TFS_Mimics
 
         private static string GetPlayerPersistentId(Player player)
         {
-            if (player == null)
-            {
-                return "unknown";
-            }
+            if (player == null) return "unknown";
 
-            // 1. Try steamID field on PlayerAvatar — this is how the game stores it.
-            //    The field is populated via AddToStatsManagerRPC on the local PlayerAvatar.
-            var steamId = TryGetSteamIdFromPlayerAvatar(player);
-            if (!string.IsNullOrWhiteSpace(steamId) && steamId != "0")
+            if (player.IsLocal)
             {
-                return steamId;
-            }
-
-            // 2. Photon UserId (set by some platforms)
-            if (!string.IsNullOrWhiteSpace(player.UserId))
-            {
-                return player.UserId;
-            }
-
-            // 3. Custom properties fallback
-            if (player.CustomProperties != null)
-            {
-                var keys = new[] { "steamid", "steam_id", "SteamId", "SteamID", "playerId", "PlayerId" };
-                foreach (var key in keys)
+                try
                 {
-                    if (player.CustomProperties.TryGetValue(key, out var value) && value != null)
-                    {
-                        var text = value.ToString();
-                        if (!string.IsNullOrWhiteSpace(text) && text != "0")
-                        {
-                            return text;
-                        }
-                    }
+                    var steamId = Steamworks.SteamClient.SteamId.ToString();
+                    if (!string.IsNullOrEmpty(steamId) && steamId != "0") return steamId;
                 }
+                catch { /* Fallback если Steam не инициализирован */ }
             }
+
+            var steamIdFromAvatar = TryGetSteamIdFromPlayerAvatar(player);
+            if (!string.IsNullOrWhiteSpace(steamIdFromAvatar) && steamIdFromAvatar != "0") return steamIdFromAvatar;
 
             return $"actor_{player.ActorNumber}";
         }
@@ -467,16 +446,16 @@ namespace TFS_Mimics
         {
             if (player == null) return null;
 
-            var avatars = UnityEngine.Object.FindObjectsByType<PlayerAvatar>(FindObjectsSortMode.None);
+            var avatars = FindObjectsByType<PlayerAvatar>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             foreach (var avatar in avatars)
             {
                 if (avatar == null) continue;
 
-                var pv = avatar.GetComponent<PhotonView>();
+                var pv = (avatar.GetComponent<PhotonView>() ?? avatar.GetComponentInParent<PhotonView>()) ?? avatar.GetComponentInChildren<PhotonView>();
+
                 if (pv == null || pv.Owner == null) continue;
                 if (pv.Owner.ActorNumber != player.ActorNumber) continue;
 
-                // Cache the field info on first use
                 if (_steamIdField == null)
                 {
                     _steamIdField = typeof(PlayerAvatar).GetField("steamID",
@@ -484,11 +463,9 @@ namespace TFS_Mimics
                 }
 
                 if (_steamIdField == null) return null;
-
                 var id = _steamIdField.GetValue(avatar) as string;
                 return string.IsNullOrWhiteSpace(id) ? null : id;
             }
-
             return null;
         }
 

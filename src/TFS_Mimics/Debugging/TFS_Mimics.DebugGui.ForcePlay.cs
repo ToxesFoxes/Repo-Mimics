@@ -17,10 +17,16 @@ namespace TFS_Mimics
             _fpmPlayerIdx = -1;
             _fpmClipIdx = -1;
             _fpmEnemyIdx = -1;
-            _fpmHearYourself = false;
+            _fpmFilterIdx = -1;
+            _fpmHearYourself = true; // Default to true so random works in solo testing
             _fpmScrollPlayer = Vector2.zero;
             _fpmScrollClip = Vector2.zero;
             _fpmScrollEnemy = Vector2.zero;
+            _fpmScrollFilter = Vector2.zero;
+            _fpmPagePlayer = 0;
+            _fpmPageClip = 0;
+            _fpmPageEnemy = 0;
+            _fpmPageFilter = 0;
             BuildFpmPlayerList();
         }
 
@@ -117,23 +123,21 @@ namespace TFS_Mimics
                 case 0: DrawFpmPagePlayer(); break;
                 case 1: DrawFpmPageClip(); break;
                 case 2: DrawFpmPageEnemy(); break;
+                case 3: DrawFpmPageFilter(); break;
             }
         }
 
         private void DrawFpmPageIndicator()
         {
-            var pages = new[] { "1. Player", "2. Clip", "3. Enemy" };
+            var pages = new[] { "1. Player", "2. Clip", "3. Enemy", "4. Filter" };
             GUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
             for (var i = 0; i < pages.Length; i++)
             {
-                if (i == 0 && _fpmPlayerIdx == -1 && _fpmPage > 0)
+                // Skip 'Clip' page if 'Random' source is selected
+                if (_fpmPlayerIdx == -1 && i == 1)
                 {
-                    // Skip clip page for Random
-                    if (i == 1)
-                    {
-                        continue;
-                    }
+                    continue;
                 }
 
                 if (i < _fpmPage)
@@ -187,7 +191,14 @@ namespace TFS_Mimics
             }
             else
             {
-                for (var i = 0; i < _fpmPlayers.Count; i++)
+                var pageSize = 10;
+                var totalPages = Mathf.Max(1, Mathf.CeilToInt(_fpmPlayers.Count / (float)pageSize));
+                if (_fpmPagePlayer >= totalPages) _fpmPagePlayer = totalPages - 1;
+
+                var start = _fpmPagePlayer * pageSize;
+                var end = Mathf.Min(start + pageSize, _fpmPlayers.Count);
+
+                for (var i = start; i < end; i++)
                 {
                     var p = _fpmPlayers[i];
                     var selected = _fpmPlayerIdx == i;
@@ -199,9 +210,27 @@ namespace TFS_Mimics
                     if (GUILayout.Button(label, selected ? _gsListItemSel : _gsListItem))
                     {
                         _fpmPlayerIdx = i;
+                        _fpmClipIdx = -1;
+                        _fpmPageClip = 0;
                     }
                     GUI.color = prevColor;
                     GUILayout.Space(2f);
+                }
+
+                if (totalPages > 1)
+                {
+                    GUILayout.FlexibleSpace();
+                    GUILayout.BeginHorizontal();
+                    GUI.enabled = _fpmPagePlayer > 0;
+                    if (GUILayout.Button("«", _gsBtn, GUILayout.Width(30f))) _fpmPagePlayer--;
+                    GUI.enabled = true;
+                    GUILayout.FlexibleSpace();
+                    GUILayout.Label($"Page {_fpmPagePlayer + 1} / {totalPages}", _gsSmall);
+                    GUILayout.FlexibleSpace();
+                    GUI.enabled = _fpmPagePlayer < totalPages - 1;
+                    if (GUILayout.Button("»", _gsBtn, GUILayout.Width(30f))) _fpmPagePlayer++;
+                    GUI.enabled = true;
+                    GUILayout.EndHorizontal();
                 }
             }
 
@@ -251,6 +280,7 @@ namespace TFS_Mimics
                 else
                 {
                     _fpmClipIdx = -1;
+                    _fpmPageClip = 0;
                     _fpmPage = 1;
                 }
             }
@@ -285,7 +315,14 @@ namespace TFS_Mimics
 
             _fpmScrollClip = GUILayout.BeginScrollView(_fpmScrollClip, GUILayout.Height(230f));
 
-            for (var i = 0; i < player.CacheIndices.Count; i++)
+            var pageSize = 10;
+            var totalPages = Mathf.Max(1, Mathf.CeilToInt(player.CacheIndices.Count / (float)pageSize));
+            if (_fpmPageClip >= totalPages) _fpmPageClip = totalPages - 1;
+
+            var start = _fpmPageClip * pageSize;
+            var end = Mathf.Min(start + pageSize, player.CacheIndices.Count);
+
+            for (var i = start; i < end; i++)
             {
                 var ci = player.CacheIndices[i];
                 if (ci < 0 || ci >= cachedAudio.Count)
@@ -304,13 +341,29 @@ namespace TFS_Mimics
                     : 0f;
                 var age = Time.time - entry.ReceivedAt;
                 var ageStr = age < 60f ? $"{age:F0}s ago" : $"{age / 60f:F1}m ago";
-                var label = $"  [{i + 1:D2}]   {dur:F2}s   received {ageStr}";
+                var label = $"  [{ci + 1:D3}]   {dur:F2}s   received {ageStr}";
 
                 if (GUILayout.Button(label, _fpmClipIdx == i ? _gsListItemSel : _gsListItem))
                 {
                     _fpmClipIdx = i;
                 }
                 GUILayout.Space(2f);
+            }
+
+            if (totalPages > 1)
+            {
+                GUILayout.FlexibleSpace();
+                GUILayout.BeginHorizontal();
+                GUI.enabled = _fpmPageClip > 0;
+                if (GUILayout.Button("«", _gsBtn, GUILayout.Width(30f))) _fpmPageClip--;
+                GUI.enabled = true;
+                GUILayout.FlexibleSpace();
+                GUILayout.Label($"Page {_fpmPageClip + 1} / {totalPages}", _gsSmall);
+                GUILayout.FlexibleSpace();
+                GUI.enabled = _fpmPageClip < totalPages - 1;
+                if (GUILayout.Button("»", _gsBtn, GUILayout.Width(30f))) _fpmPageClip++;
+                GUI.enabled = true;
+                GUILayout.EndHorizontal();
             }
 
             GUILayout.EndScrollView();
@@ -357,7 +410,14 @@ namespace TFS_Mimics
             }
             else
             {
-                for (var i = 0; i < _fpmEnemies.Count; i++)
+                var pageSize = 10;
+                var totalPages = Mathf.Max(1, Mathf.CeilToInt(_fpmEnemies.Count / (float)pageSize));
+                if (_fpmPageEnemy >= totalPages) _fpmPageEnemy = totalPages - 1;
+
+                var start = _fpmPageEnemy * pageSize;
+                var end = Mathf.Min(start + pageSize, _fpmEnemies.Count);
+
+                for (var i = start; i < end; i++)
                 {
                     var e = _fpmEnemies[i];
                     var selected = _fpmEnemyIdx == i;
@@ -371,6 +431,22 @@ namespace TFS_Mimics
                     GUI.color = Color.white;
                     GUILayout.Space(2f);
                 }
+
+                if (totalPages > 1)
+                {
+                    GUILayout.FlexibleSpace();
+                    GUILayout.BeginHorizontal();
+                    GUI.enabled = _fpmPageEnemy > 0;
+                    if (GUILayout.Button("«", _gsBtn, GUILayout.Width(30f))) _fpmPageEnemy--;
+                    GUI.enabled = true;
+                    GUILayout.FlexibleSpace();
+                    GUILayout.Label($"Page {_fpmPageEnemy + 1} / {totalPages}", _gsSmall);
+                    GUILayout.FlexibleSpace();
+                    GUI.enabled = _fpmPageEnemy < totalPages - 1;
+                    if (GUILayout.Button("»", _gsBtn, GUILayout.Width(30f))) _fpmPageEnemy++;
+                    GUI.enabled = true;
+                    GUILayout.EndHorizontal();
+                }
             }
 
             GUILayout.EndScrollView();
@@ -381,6 +457,77 @@ namespace TFS_Mimics
             if (GUILayout.Button("← Back", _gsBtn, GUILayout.Height(28f), GUILayout.Width(80f)))
             {
                 _fpmPage = _fpmPlayerIdx == -1 ? 0 : 1;
+            }
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Next: Filter →", _gsBtnPrimary, GUILayout.Height(28f), GUILayout.Width(110f)))
+            {
+                _fpmPage = 3;
+            }
+            GUILayout.EndHorizontal();
+        }
+
+        // ── Modal Page 4: Filter ────────────────────────────────────────────────
+        private void DrawFpmPageFilter()
+        {
+            GUI.color = CTextDim;
+            GUILayout.Label("Select audio effect:", _gsSmall);
+            GUI.color = Color.white;
+            GUILayout.Space(4f);
+
+            _fpmScrollFilter = GUILayout.BeginScrollView(_fpmScrollFilter, GUILayout.Height(210f));
+
+            // Filter selection list
+            // -1 = Default (Random chance or None)
+            if (GUILayout.Button("Default / Random", _fpmFilterIdx == -1 ? _gsListItemSel : _gsListItem))
+            {
+                _fpmFilterIdx = -1;
+            }
+            GUILayout.Space(2f);
+
+            // Use the registry list from AudioFilters
+            var count = AudioFilters.Count;
+            var pageSize = 10;
+            var totalPages = Mathf.Max(1, Mathf.CeilToInt(count / (float)pageSize));
+            if (_fpmPageFilter >= totalPages) _fpmPageFilter = totalPages - 1;
+
+            var start = _fpmPageFilter * pageSize;
+            var end = Mathf.Min(start + pageSize, count);
+
+            for (var i = start; i < end; i++)
+            {
+                var label = AudioFilters.Registry[i].Key;
+                if (GUILayout.Button($"Effect: {label}", _fpmFilterIdx == i ? _gsListItemSel : _gsListItem))
+                {
+                    _fpmFilterIdx = i;
+                }
+                GUILayout.Space(2f);
+            }
+
+            if (totalPages > 1)
+            {
+                GUILayout.FlexibleSpace();
+                GUILayout.BeginHorizontal();
+                GUI.enabled = _fpmPageFilter > 0;
+                if (GUILayout.Button("«", _gsBtn, GUILayout.Width(30f))) _fpmPageFilter--;
+                GUI.enabled = true;
+                GUILayout.FlexibleSpace();
+                GUILayout.Label($"Page {_fpmPageFilter + 1} / {totalPages}", _gsSmall);
+                GUILayout.FlexibleSpace();
+                GUI.enabled = _fpmPageFilter < totalPages - 1;
+                if (GUILayout.Button("»", _gsBtn, GUILayout.Width(30f))) _fpmPageFilter++;
+                GUI.enabled = true;
+                GUILayout.EndHorizontal();
+            }
+
+            GUILayout.EndScrollView();
+
+            DrawHRule();
+            GUILayout.Space(4f);
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("← Back", _gsBtn, GUILayout.Height(28f), GUILayout.Width(80f)))
+            {
+                _fpmPage = 2;
             }
             GUILayout.FlexibleSpace();
             GUI.color = CYellow;
@@ -398,27 +545,30 @@ namespace TFS_Mimics
             _fpmOpen = false;
 
             // Resolve entry
-            CachedAudioEntry entry = null;
+            string soundGuid = string.Empty;
             var localId = PhotonNetwork.LocalPlayer != null
                 ? GetPlayerPersistentId(PhotonNetwork.LocalPlayer)
                 : string.Empty;
 
             if (_fpmPlayerIdx == -1)
             {
-                // Random
-                var pool = cachedAudio.Where(e => e != null && e.AudioData != null && e.AudioData.Length > 0).ToList();
-                if (!_fpmHearYourself && !string.IsNullOrEmpty(localId))
-                {
-                    pool = pool.Where(e => !string.Equals(e.SourcePlayerId, localId, System.StringComparison.OrdinalIgnoreCase)).ToList();
-                }
+                var allPlayers = PhotonNetwork.PlayerList;
+                if (allPlayers == null || allPlayers.Length == 0) return;
 
-                if (pool.Count == 0)
+                var allActors = new HashSet<int>(allPlayers.Select(p => p.ActorNumber));
+                // Random
+                var eligibleSounds = soundReadinessMap
+                    .Where(kv => allActors.All(a => kv.Value.Contains(a)))
+                    .Select(kv => kv.Key)
+                    .ToList();
+
+                if (eligibleSounds.Count == 0)
                 {
-                    DLog($"ForcePlay: no eligible clips (hearYourself={_fpmHearYourself}) {DebugContext()}");
+                    DLog($"HostAuthorityTick: no eligible sounds (map={soundReadinessMap.Count} entries, players={allActors.Count})");
                     return;
                 }
 
-                entry = pool[UnityEngine.Random.Range(0, pool.Count)];
+                soundGuid = eligibleSounds[UnityEngine.Random.Range(0, eligibleSounds.Count)];
             }
             else if (_fpmPlayers != null && _fpmPlayerIdx >= 0 && _fpmPlayerIdx < _fpmPlayers.Count)
             {
@@ -428,12 +578,12 @@ namespace TFS_Mimics
                     var ci = p.CacheIndices[_fpmClipIdx];
                     if (ci >= 0 && ci < cachedAudio.Count)
                     {
-                        entry = cachedAudio[ci];
+                        soundGuid = cachedAudio[ci].SoundGuid;
                     }
                 }
             }
 
-            if (entry == null || entry.AudioData == null || entry.AudioData.Length == 0)
+            if (string.IsNullOrEmpty(soundGuid))
             {
                 DLog($"ForcePlay: entry is null or empty {DebugContext()}");
                 return;
@@ -465,63 +615,20 @@ namespace TFS_Mimics
                 return;
             }
 
-            DLog($"ForcePlay: entry={entry.SourceActor}:{entry.SourceName} enemy={enemy.name} bytes={entry.AudioData.Length} {DebugContext()}");
-            PlayReceivedAudioOnTarget(entry, enemy, target);
-        }
-
-        private void PlayReceivedAudioOnTarget(CachedAudioEntry entry, GameObject enemy, GameObject target)
-        {
-            var applyFilter = (Plugin.configPlaybackVoiceFilterEnabled == null || Plugin.configPlaybackVoiceFilterEnabled.Value)
-                && UnityEngine.Random.value > 0.9f;
-
-            var samples = ConvertByteArrayToFloatArray(entry.AudioData, applyFilter, entry.SampleRate);
-            var clip = AudioClip.Create("ForcePlayClip", samples.Length, 1, entry.SampleRate, false);
-            clip.SetData(samples, 0);
-
-            var position = GetEnemyDistancePosition(enemy, target);
-            var source = GetOrCreateReusableEnemyAudioSource(enemy, target, position);
-            if (source == null)
+            var viewId = GetEnemyNetViewId(enemy);
+            if (viewId < 0)
             {
-                DLog($"ForcePlay: failed to get audio source for enemy={enemy.name} {DebugContext()}");
+                DLog($"ForcePlay: enemy has no ViewID {DebugContext()}");
                 return;
             }
 
-            source.clip = clip;
-            source.volume = GetVolumeForPlayer(entry.SourcePlayerId);
-            source.mute = false;
-            source.pitch = 1f;
-            source.loop = false;
-            source.bypassEffects = false;
-            source.bypassListenerEffects = false;
-            source.spatialBlend = 1f;
-            source.dopplerLevel = 0.5f;
-            source.minDistance = 1f;
-            source.maxDistance = 20f;
-            source.rolloffMode = AudioRolloffMode.Linear;
-            source.outputAudioMixerGroup = null;
-            source.Play();
+            DLog($"ForcePlay: soundGuid={soundGuid} enemy={enemy.name} {DebugContext()}");
 
-            var playbackEndsAt = Time.time + clip.length + 0.1f;
-            var targetKey = GetPlaybackTargetKey(enemy, target);
-            if (targetKey != 0)
-            {
-                playbackBusyUntilByTargetKey[targetKey] = playbackEndsAt;
-                playbackStartedAtByTargetKey[targetKey] = Time.time;
-                playbackClipLengthByTargetKey[targetKey] = clip.length;
-            }
-
-            currentPlaybackEnemyName = NormalizeEnemyName(enemy.name);
-            currentPlaybackSourcePlayerId = !string.IsNullOrWhiteSpace(entry.SourcePlayerId)
-                ? entry.SourcePlayerId
-                : (entry.SourceActor >= 0 ? $"actor_{entry.SourceActor}" : "unknown");
-            hudTrackedEnemy = enemy;
-            hudTrackedTarget = target;
-            hudLastSelectedEnemyPos = position;
-            hudHasSelectedEnemyPos = true;
-            currentPlaybackEndsAt = playbackEndsAt;
-
-            DLog($"ForcePlay: playing on enemy={enemy.name} source={entry.SourceActor}:{entry.SourceName} clipLen={clip.length:F2}s {DebugContext()}");
-            StartCoroutine(ResetReusableAudioSourceAfterDelay(source, clip.length + 0.1f));
+            // Use Host Authority Tick logic to synchronize playback across all clients
+            // If filter is -1 (Default/Random), pass -2 to trigger the host-side random selection logic
+            HostAuthorityTick(soundGuid, [viewId], _fpmFilterIdx == -1 ? -2 : _fpmFilterIdx);
         }
+
+        /* PlayReceivedAudioOnTarget removed - logic now handled via HostAuthorityTick -> SyncPlayCommandPacket */
     }
 }

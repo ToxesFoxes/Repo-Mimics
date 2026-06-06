@@ -40,130 +40,155 @@ namespace TFS_Mimics
             DLog("HostAuthorityLoop: stopped");
         }
 
-        private void HostAuthorityTick()
+        private void HostAuthorityTick(string forceSoundGuid = null, int[] forceEnemyViewIds = null, int forceFilterMode = -2)
         {
-            var allPlayers = PhotonNetwork.PlayerList;
-            if (allPlayers == null || allPlayers.Length == 0) return;
+            string soundGuid;
+            int[] selectedViewIds;
+            int voiceFilterMode;
+            var playerCoverageCount = 0;
 
-            var allActors = new HashSet<int>(allPlayers.Select(p => p.ActorNumber));
-
-            // --- Eligible sounds: those that ALL players have ---
-            var eligibleSounds = soundReadinessMap
-                .Where(kv => allActors.All(a => kv.Value.Contains(a)))
-                .Select(kv => kv.Key)
-                .ToList();
-
-            if (eligibleSounds.Count == 0)
+            if (!string.IsNullOrEmpty(forceSoundGuid))
             {
-                DLog($"HostAuthorityTick: no eligible sounds (map={soundReadinessMap.Count} entries, players={allActors.Count})");
-                return;
-            }
+                soundGuid = forceSoundGuid;
+                selectedViewIds = forceEnemyViewIds;
+                voiceFilterMode = forceFilterMode;
 
-            // --- Build proximity maps ---
-            var nearRadius = (float)(Plugin.configPlaybackNearRadius?.Value ?? 15);
-            var avatars = FindObjectsByType<PlayerAvatar>(FindObjectsSortMode.None);
-            var enemies = GetEnemiesList().Where(e => e != null).ToList();
-
-            if (enemies.Count == 0) return;
-
-            // Build enemy data list — skip enemies currently playing audio
-            var enemyData = new List<(GameObject go, int viewId, Vector3 pos)>();
-            foreach (var enemy in enemies)
-            {
-                var viewId = GetEnemyNetViewId(enemy);
-                if (viewId < 0) continue;
-                var targetKey = GetPlaybackTargetKey(enemy, null);
-                if (targetKey != 0 && playbackBusyUntilByTargetKey.TryGetValue(targetKey, out var busyUntil) && busyUntil > Time.time)
-                    continue;
-                var pos = GetEnemyDistancePosition(enemy, null);
-                enemyData.Add((enemy, viewId, pos));
-            }
-
-            if (enemyData.Count == 0) return;
-
-            // enemyNearbyActors: viewId → actors within radius
-            var enemyNearbyActors = new Dictionary<int, List<int>>();
-            foreach (var (_, viewId, _) in enemyData)
-                enemyNearbyActors[viewId] = new List<int>();
-
-            // playerNearbyEnemies: actorNumber → enemies within radius
-            var playerNearbyEnemies = new Dictionary<int, List<int>>();
-
-            foreach (var avatar in avatars)
-            {
-                if (avatar?.photonView?.Owner == null) continue;
-                var actorNumber = avatar.photonView.Owner.ActorNumber;
-                var playerPos = avatar.transform.position;
-
-                foreach (var (_, viewId, pos) in enemyData)
+                if (voiceFilterMode == -2)
                 {
-                    if (Vector3.Distance(playerPos, pos) <= nearRadius)
+                    var filterEnabled = Plugin.configPlaybackVoiceFilterEnabled == null || Plugin.configPlaybackVoiceFilterEnabled.Value;
+                    voiceFilterMode = (filterEnabled && UnityEngine.Random.value > 0.9f)
+                        ? UnityEngine.Random.Range(0, AudioFilters.Count)
+                        : -1;
+                }
+            }
+            else
+            {
+                var allPlayers = PhotonNetwork.PlayerList;
+                if (allPlayers == null || allPlayers.Length == 0) return;
+
+                var allActors = new HashSet<int>(allPlayers.Select(p => p.ActorNumber));
+
+                // --- Eligible sounds: those that ALL players have ---
+                var eligibleSounds = soundReadinessMap
+                    .Where(kv => allActors.All(a => kv.Value.Contains(a)))
+                    .Select(kv => kv.Key)
+                    .ToList();
+
+                if (eligibleSounds.Count == 0)
+                {
+                    DLog($"HostAuthorityTick: no eligible sounds (map={soundReadinessMap.Count} entries, players={allActors.Count})");
+                    return;
+                }
+
+                // --- Build proximity maps ---
+                var nearRadius = (float)(Plugin.configPlaybackNearRadius?.Value ?? 15);
+                var avatars = FindObjectsByType<PlayerAvatar>(FindObjectsSortMode.None);
+                var enemies = GetEnemiesList().Where(e => e != null).ToList();
+
+                if (enemies.Count == 0) return;
+
+                // Build enemy data list — skip enemies currently playing audio
+                var enemyData = new List<(GameObject go, int viewId, Vector3 pos)>();
+                foreach (var enemy in enemies)
+                {
+                    var viewId = GetEnemyNetViewId(enemy);
+                    if (viewId < 0) continue;
+                    var targetKey = GetPlaybackTargetKey(enemy, null);
+                    if (targetKey != 0 && playbackBusyUntilByTargetKey.TryGetValue(targetKey, out var busyUntil) && busyUntil > Time.time)
+                        continue;
+                    var pos = GetEnemyDistancePosition(enemy, null);
+                    enemyData.Add((enemy, viewId, pos));
+                }
+
+                if (enemyData.Count == 0) return;
+
+                // enemyNearbyActors: viewId → actors within radius
+                var enemyNearbyActors = new Dictionary<int, List<int>>();
+                foreach (var (_, viewId, _) in enemyData)
+                    enemyNearbyActors[viewId] = new List<int>();
+
+                // playerNearbyEnemies: actorNumber → enemies within radius
+                var playerNearbyEnemies = new Dictionary<int, List<int>>();
+
+                foreach (var avatar in avatars)
+                {
+                    if (avatar?.photonView?.Owner == null) continue;
+                    var actorNumber = avatar.photonView.Owner.ActorNumber;
+                    var playerPos = avatar.transform.position;
+
+                    foreach (var (_, viewId, pos) in enemyData)
                     {
-                        if (!playerNearbyEnemies.TryGetValue(actorNumber, out var pList))
+                        if (Vector3.Distance(playerPos, pos) <= nearRadius)
                         {
-                            pList = new List<int>();
-                            playerNearbyEnemies[actorNumber] = pList;
+                            if (!playerNearbyEnemies.TryGetValue(actorNumber, out var pList))
+                            {
+                                pList = new List<int>();
+                                playerNearbyEnemies[actorNumber] = pList;
+                            }
+                            pList.Add(viewId);
+                            enemyNearbyActors[viewId].Add(actorNumber);
                         }
-                        pList.Add(viewId);
-                        enemyNearbyActors[viewId].Add(actorNumber);
                     }
                 }
-            }
 
-            if (playerNearbyEnemies.Count == 0) return;
+                if (playerNearbyEnemies.Count == 0) return;
+                playerCoverageCount = playerNearbyEnemies.Count;
 
-            // --- Select sound ---
-            var soundGuid = eligibleSounds[UnityEngine.Random.Range(0, eligibleSounds.Count)];
+                // --- Select sound ---
+                soundGuid = eligibleSounds[UnityEngine.Random.Range(0, eligibleSounds.Count)];
 
-            // --- Greedy Set Cover: minimum mobs to cover all players with nearby mobs ---
-            var playersToCover = new HashSet<int>(playerNearbyEnemies.Keys);
-            var selectedViewIds = new List<int>();
+                // --- Greedy Set Cover: minimum mobs to cover all players with nearby mobs ---
+                var playersToCover = new HashSet<int>(playerNearbyEnemies.Keys);
+                var resultViewIds = new List<int>();
 
-            // Work on a mutable copy so we can remove covered enemies
-            var remaining = enemyNearbyActors
-                .Where(kv => kv.Value.Count > 0)
-                .ToDictionary(kv => kv.Key, kv => new List<int>(kv.Value));
+                // Work on a mutable copy so we can remove covered enemies
+                var remaining = enemyNearbyActors
+                    .Where(kv => kv.Value.Count > 0)
+                    .ToDictionary(kv => kv.Key, kv => new List<int>(kv.Value));
 
-            while (playersToCover.Count > 0 && remaining.Count > 0)
-            {
-                var bestViewId = -1;
-                var bestCoverage = 0;
-
-                foreach (var (viewId, actors) in remaining)
+                while (playersToCover.Count > 0 && remaining.Count > 0)
                 {
-                    var coverage = actors.Count(a => playersToCover.Contains(a));
-                    if (coverage > bestCoverage)
+                    var bestViewId = -1;
+                    var bestCoverage = 0;
+
+                    foreach (var (viewId, actors) in remaining)
                     {
-                        bestCoverage = coverage;
-                        bestViewId = viewId;
+                        var coverage = actors.Count(a => playersToCover.Contains(a));
+                        if (coverage > bestCoverage)
+                        {
+                            bestCoverage = coverage;
+                            bestViewId = viewId;
+                        }
                     }
+
+                    if (bestViewId < 0 || bestCoverage == 0) break;
+
+                    resultViewIds.Add(bestViewId);
+                    foreach (var actor in remaining[bestViewId])
+                        playersToCover.Remove(actor);
+                    remaining.Remove(bestViewId);
                 }
+                selectedViewIds = resultViewIds.ToArray();
 
-                if (bestViewId < 0 || bestCoverage == 0) break;
-
-                selectedViewIds.Add(bestViewId);
-                foreach (var actor in remaining[bestViewId])
-                    playersToCover.Remove(actor);
-                remaining.Remove(bestViewId);
+                var filterEnabled = Plugin.configPlaybackVoiceFilterEnabled == null || Plugin.configPlaybackVoiceFilterEnabled.Value;
+                voiceFilterMode = (filterEnabled && UnityEngine.Random.value > 0.9f)
+                    ? UnityEngine.Random.Range(0, AudioFilters.Count)
+                    : -1;
             }
 
-            if (selectedViewIds.Count == 0) return;
+            if (selectedViewIds == null || selectedViewIds.Length == 0) return;
 
             var hostActor = PhotonNetwork.LocalPlayer?.ActorNumber ?? -1;
-            var filterEnabled = Plugin.configPlaybackVoiceFilterEnabled == null || Plugin.configPlaybackVoiceFilterEnabled.Value;
-            // Host picks filter mode once; -1 = no filter, otherwise index into AudioFilters.Registry
-            var voiceFilterMode = (filterEnabled && UnityEngine.Random.value > 0.9f)
-                ? UnityEngine.Random.Range(0, AudioFilters.Count)
-                : -1;
             var cmd = new SyncPlayCommandPacket
             {
                 SoundGuid = soundGuid,
-                EnemyViewIds = selectedViewIds.ToArray(),
+                EnemyViewIds = selectedViewIds,
                 HostActorNumber = hostActor,
                 VoiceFilterMode = voiceFilterMode
             };
 
-            DLog($"HostAuthorityTick: guid={soundGuid} enemies=[{string.Join(",", selectedViewIds)}] players={playerNearbyEnemies.Count}");
+            var prefix = string.IsNullOrEmpty(forceSoundGuid) ? "HostAuthorityTick" : "ForcePlaySync";
+            DLog($"{prefix}: guid={soundGuid} enemies=[{string.Join(",", selectedViewIds)}] players={playerCoverageCount}");
 
             // Send to all non-host clients, then execute locally on host
             RepoSteamNetwork.SendPacket(cmd, NetworkDestination.ClientsOnly);

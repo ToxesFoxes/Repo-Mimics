@@ -55,20 +55,24 @@ Settings are stored in the BepInEx config file:
 
 ### General
 
-- `Volume` (default: `30`, range: `0-100`) — mimic playback volume in percent.
-- `Hear Yourself?` (default: `true`) — if `false`, only other players hear mimic playback.
-- `Persist Audio Cache` (default: `false`) — enables saving received mimic clips to disk between sessions.
-- `Persist Max Files Per Player` (default: `100`, range: `1-5000`) — max saved recordings per player folder.
-- `Normalize Target` (default: `85`, range: `0-100`) — peak normalization target for voice and custom audio (`0` = off, `100` = 0 dBFS).
+| Setting                        | Default | Acceptable Values | Description                                                                       |
+| ------------------------------ | ------- | ----------------- | --------------------------------------------------------------------------------- |
+| `Volume`                       | `30`    | `0-100`           | Mimic playback volume in percent.                                                 |
+| `Hear Yourself?`               | `true`  | `true` / `false`  | If `false`, only other players hear mimic playback.                               |
+| `Persist Audio Cache`          | `false` | `true` / `false`  | Enables saving received mimic clips to disk between sessions.                     |
+| `Persist Max Files Per Player` | `100`   | `1-5000`          | Max saved recordings per player folder.                                           |
+| `Normalize Target`             | `85`    | `0-100`           | Peak normalization target for voice and custom audio (`0` = off, `100` = 0 dBFS). |
 
 ### Host Only
 
 These settings only take effect on the player who is host. Clients can leave them at defaults.
 
-- `Playback Near Radius` (default: `15`, range: `5-100`) — preferred radius around players for selecting a mimic target enemy.
-- `MinDelay` (default: `10`, range: `5-300`) — minimum seconds between mimic playback cycles.
-- `MaxDelay` (default: `20`, range: `10-600`) — maximum seconds between mimic playback cycles.
-- `Playback Voice Filters Enabled` (default: `true`) — if `true`, the host randomly applies a pitch or alien voice filter to playback. All players hear the same effect.
+| Setting                          | Default | Acceptable Values | Description                                                                                      |
+| -------------------------------- | ------- | ----------------- | ------------------------------------------------------------------------------------------------ |
+| `Playback Near Radius`           | `15`    | `5-100`           | Preferred radius around players for selecting a mimic target enemy.                              |
+| `MinDelay`                       | `10`    | `1-300`           | Minimum seconds between mimic playback cycles.                                                   |
+| `MaxDelay`                       | `20`    | `5-600`           | Maximum seconds between mimic playback cycles.                                                   |
+| `Playback Voice Filters Enabled` | `true`  | `true` / `false`  | If `true`, the host randomly applies voice filter to playback. All players hear the same effect. |
 
 ### Filter
 
@@ -80,6 +84,7 @@ These settings only take effect on the player who is host. Clients can leave the
 
 ### Debug
 
+- `Menu Keybind` (default: `F8`) — keybind to open the Mimics debug menu in-game.
 - `Verbose Logging` (default: `false`) — enables detailed debug logs.
 
 ## 📁 Custom Audio

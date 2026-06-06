@@ -162,17 +162,18 @@ namespace TFS_Mimics
 
         private void DebugGuiUpdate()
         {
-            if (Input.GetKeyDown(KeyCode.F8))
+            var menuKey = Plugin.GetDebugMenuKey();
+            if (Input.GetKeyDown(menuKey))
             {
                 var shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
                 if (shift && _debugWindowOpen)
                 {
-                    // Shift+F8 — переключить фокус (вернуть курсор игре), окно остаётся видимым
+                    // Shift+Key — переключить фокус (вернуть курсор игре), окно остаётся видимым
                     _debugWindowFocused = !_debugWindowFocused;
                 }
                 else
                 {
-                    // F8 — переключить окно
+                    // Key — переключить окно
                     _debugWindowOpen = !_debugWindowOpen;
                     _debugWindowFocused = _debugWindowOpen;
                     if (_debugWindowOpen)
@@ -311,7 +312,7 @@ namespace TFS_Mimics
 
         private void DrawMainWindow(int id)
         {
-            DrawWindowTitleBar("MIMICS  DEBUG", "[F8]");
+            DrawWindowTitleBar("MIMICS  DEBUG", $"[{Plugin.configDebugMenuKey.Value}]");
             GUILayout.Space(4f);
             DrawPlaybackHeader();
             GUILayout.Space(4f);

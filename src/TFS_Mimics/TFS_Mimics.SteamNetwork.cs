@@ -133,7 +133,7 @@ namespace TFS_Mimics
     // ─────────────────────────────────────────────────────────────────────────────
     public partial class TFS_Mimics
     {
-        // ── Existing handler ──────────────────────────────────────────────────────
+        // ── Handlers ─────────────────────────────────────────────────────────────
         internal static void OnMimicsAudioPacketReceived(MimicsAudioPacket packet)
         {
             var localInstance = Instance;
@@ -153,8 +153,6 @@ namespace TFS_Mimics
                 packet.TransmissionId,
                 sender);
         }
-
-        // ── New handlers ──────────────────────────────────────────────────────────
 
         internal static void OnSoundReadyPacketReceived(SoundReadyPacket packet)
         {
@@ -176,7 +174,6 @@ namespace TFS_Mimics
         }
 
         // ── Helpers called from audio pipeline ────────────────────────────────────
-
         internal void NotifyHostSoundReady(string soundGuid)
         {
             if (string.IsNullOrEmpty(soundGuid)) return;
@@ -233,7 +230,6 @@ namespace TFS_Mimics
         }
 
         // ── Host-side processing ──────────────────────────────────────────────────
-
         private void RegisterVoiceSoundReady(string soundGuid, int actorNumber)
         {
             if (string.IsNullOrEmpty(soundGuid) || actorNumber < 0) return;

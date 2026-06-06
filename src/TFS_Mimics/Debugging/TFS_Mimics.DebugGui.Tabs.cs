@@ -887,8 +887,18 @@ namespace TFS_Mimics
                 return;
             }
 
-            DLog($"PlayCacheEntryOnNearest: playing on {nearest.EnemyName} dist={nearest.Distance:F1}m {DebugContext()}");
-            PlayReceivedAudioOnTarget(entry, nearest.Enemy, nearest.Target);
+            var viewId = GetEnemyNetViewId(nearest.Enemy);
+            if (viewId < 0)
+            {
+                DLog($"PlayCacheEntryOnNearest: nearest enemy has no ViewID {DebugContext()}");
+                return;
+            }
+
+            DLog($"PlayCacheEntryOnNearest: playing on {nearest.EnemyName} {DebugContext()}");
+
+            // Use Host Authority Tick logic to synchronize playback
+            // Pass -2 to use the default host-side random filter selection
+            HostAuthorityTick(entry.SoundGuid, new int[] { viewId }, -2);
         }
 
         // ─── Tab Cache Rebuild ────────────────────────────────────────────────────

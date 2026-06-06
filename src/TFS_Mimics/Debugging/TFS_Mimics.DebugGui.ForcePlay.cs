@@ -18,7 +18,7 @@ namespace TFS_Mimics
             _fpmClipIdx = -1;
             _fpmEnemyIdx = -1;
             _fpmFilterIdx = -1;
-            _fpmHearYourself = false;
+            _fpmHearYourself = true; // Default to true so random works in solo testing
             _fpmScrollPlayer = Vector2.zero;
             _fpmScrollClip = Vector2.zero;
             _fpmScrollEnemy = Vector2.zero;
@@ -545,27 +545,30 @@ namespace TFS_Mimics
             _fpmOpen = false;
 
             // Resolve entry
-            CachedAudioEntry entry = null;
+            string soundGuid = string.Empty;
             var localId = PhotonNetwork.LocalPlayer != null
                 ? GetPlayerPersistentId(PhotonNetwork.LocalPlayer)
                 : string.Empty;
 
             if (_fpmPlayerIdx == -1)
             {
-                // Random
-                var pool = cachedAudio.Where(e => e != null && e.AudioData != null && e.AudioData.Length > 0).ToList();
-                if (!_fpmHearYourself && !string.IsNullOrEmpty(localId))
-                {
-                    pool = pool.Where(e => !string.Equals(e.SourcePlayerId, localId, System.StringComparison.OrdinalIgnoreCase)).ToList();
-                }
+                var allPlayers = PhotonNetwork.PlayerList;
+                if (allPlayers == null || allPlayers.Length == 0) return;
 
-                if (pool.Count == 0)
+                var allActors = new HashSet<int>(allPlayers.Select(p => p.ActorNumber));
+                // Random
+                var eligibleSounds = soundReadinessMap
+                    .Where(kv => allActors.All(a => kv.Value.Contains(a)))
+                    .Select(kv => kv.Key)
+                    .ToList();
+
+                if (eligibleSounds.Count == 0)
                 {
-                    DLog($"ForcePlay: no eligible clips (hearYourself={_fpmHearYourself}) {DebugContext()}");
+                    DLog($"HostAuthorityTick: no eligible sounds (map={soundReadinessMap.Count} entries, players={allActors.Count})");
                     return;
                 }
 
-                entry = pool[UnityEngine.Random.Range(0, pool.Count)];
+                soundGuid = eligibleSounds[UnityEngine.Random.Range(0, eligibleSounds.Count)];
             }
             else if (_fpmPlayers != null && _fpmPlayerIdx >= 0 && _fpmPlayerIdx < _fpmPlayers.Count)
             {
@@ -575,12 +578,12 @@ namespace TFS_Mimics
                     var ci = p.CacheIndices[_fpmClipIdx];
                     if (ci >= 0 && ci < cachedAudio.Count)
                     {
-                        entry = cachedAudio[ci];
+                        soundGuid = cachedAudio[ci].SoundGuid;
                     }
                 }
             }
 
-            if (entry == null || entry.AudioData == null || entry.AudioData.Length == 0)
+            if (string.IsNullOrEmpty(soundGuid))
             {
                 DLog($"ForcePlay: entry is null or empty {DebugContext()}");
                 return;
@@ -612,73 +615,20 @@ namespace TFS_Mimics
                 return;
             }
 
-            DLog($"ForcePlay: entry={entry.SourceActor}:{entry.SourceName} enemy={enemy.name} bytes={entry.AudioData.Length} {DebugContext()}");
-            PlayReceivedAudioOnTarget(entry, enemy, target);
-        }
-
-        private void PlayReceivedAudioOnTarget(CachedAudioEntry entry, GameObject enemy, GameObject target)
-        {
-            float[] samples;
-            if (_fpmFilterIdx != -1)
+            var viewId = GetEnemyNetViewId(enemy);
+            if (viewId < 0)
             {
-                // Use specific filter selected by user
-                samples = ConvertByteArrayToFloatArray(entry.AudioData, _fpmFilterIdx, entry.SampleRate);
-            }
-            else
-            {
-                // Default logic: random chance
-                var applyFilter = (Plugin.configPlaybackVoiceFilterEnabled == null || Plugin.configPlaybackVoiceFilterEnabled.Value)
-                    && UnityEngine.Random.value > 0.9f;
-                samples = ConvertByteArrayToFloatArray(entry.AudioData, applyFilter, entry.SampleRate);
-            }
-
-            var clip = AudioClip.Create("ForcePlayClip", samples.Length, 1, entry.SampleRate, false);
-            clip.SetData(samples, 0);
-
-            var position = GetEnemyDistancePosition(enemy, target);
-            var source = GetOrCreateReusableEnemyAudioSource(enemy, target, position);
-            if (source == null)
-            {
-                DLog($"ForcePlay: failed to get audio source for enemy={enemy.name} {DebugContext()}");
+                DLog($"ForcePlay: enemy has no ViewID {DebugContext()}");
                 return;
             }
 
-            source.clip = clip;
-            source.volume = GetVolumeForPlayer(entry.SourcePlayerId);
-            source.mute = false;
-            source.pitch = 1f;
-            source.loop = false;
-            source.bypassEffects = false;
-            source.bypassListenerEffects = false;
-            source.spatialBlend = 1f;
-            source.dopplerLevel = 0.5f;
-            source.minDistance = 1f;
-            source.maxDistance = 20f;
-            source.rolloffMode = AudioRolloffMode.Linear;
-            source.outputAudioMixerGroup = null;
-            source.Play();
+            DLog($"ForcePlay: soundGuid={soundGuid} enemy={enemy.name} {DebugContext()}");
 
-            var playbackEndsAt = Time.time + clip.length + 0.1f;
-            var targetKey = GetPlaybackTargetKey(enemy, target);
-            if (targetKey != 0)
-            {
-                playbackBusyUntilByTargetKey[targetKey] = playbackEndsAt;
-                playbackStartedAtByTargetKey[targetKey] = Time.time;
-                playbackClipLengthByTargetKey[targetKey] = clip.length;
-            }
-
-            currentPlaybackEnemyName = NormalizeEnemyName(enemy.name);
-            currentPlaybackSourcePlayerId = !string.IsNullOrWhiteSpace(entry.SourcePlayerId)
-                ? entry.SourcePlayerId
-                : (entry.SourceActor >= 0 ? $"actor_{entry.SourceActor}" : "unknown");
-            hudTrackedEnemy = enemy;
-            hudTrackedTarget = target;
-            hudLastSelectedEnemyPos = position;
-            hudHasSelectedEnemyPos = true;
-            currentPlaybackEndsAt = playbackEndsAt;
-
-            DLog($"ForcePlay: playing on enemy={enemy.name} source={entry.SourceActor}:{entry.SourceName} clipLen={clip.length:F2}s {DebugContext()}");
-            StartCoroutine(ResetReusableAudioSourceAfterDelay(source, clip.length + 0.1f));
+            // Use Host Authority Tick logic to synchronize playback across all clients
+            // If filter is -1 (Default/Random), pass -2 to trigger the host-side random selection logic
+            HostAuthorityTick(soundGuid, [viewId], _fpmFilterIdx == -1 ? -2 : _fpmFilterIdx);
         }
+
+        /* PlayReceivedAudioOnTarget removed - logic now handled via HostAuthorityTick -> SyncPlayCommandPacket */
     }
 }

@@ -200,12 +200,16 @@ namespace TFS_Mimics
 
             // RMS energy-based voice activity detection — no reflection into PlayerVoiceChat internals.
             var energy = ComputeRmsEnergy(voiceData);
-            if (energy > VadEnergyThreshold)
+            var isTalking = Time.time < vadHoldUntil;
+            if (energy > GetVadThreshold())
             {
                 vadHoldUntil = Time.time + VadHoldSeconds;
+                isTalking = true;
             }
-
-            var isTalking = Time.time < vadHoldUntil;
+            else if (!isTalking)
+            {
+                UpdateNoiseFloor(energy);
+            }
 
             if (isTalking && !capturingSpeech)
             {
@@ -298,8 +302,34 @@ namespace TFS_Mimics
 
         // Voice activity detection using per-frame RMS energy.
         // This avoids reflecting into PlayerVoiceChat private state entirely.
-        private const float VadEnergyThreshold = 0.012f;
+        // Since 0.5.0 the captured mic stream is raw (no OS AGC), speech sits around 0.007–0.03 RMS,
+        // so the threshold is a sensitivity-based floor raised above the tracked background noise.
+        // 0 = pre-0.5.0 threshold, default 85 ≈ 0.0027 (tuned in-game).
+        private const float VadThresholdAtMinSensitivity = 0.012f;
+        private const float VadThresholdAtMaxSensitivity = 0.001f;
+        private const float VadNoiseFloorMultiplier = 3f;
         private const float VadHoldSeconds = 0.5f;
+
+        private float vadNoiseFloor;
+
+        private float GetVadThreshold()
+        {
+            var sensitivity = Mathf.Clamp01((Plugin.configVadSensitivity?.Value ?? 85) / 100f);
+            var floor = Mathf.Lerp(VadThresholdAtMinSensitivity, VadThresholdAtMaxSensitivity, sensitivity);
+            return Mathf.Max(floor, vadNoiseFloor * VadNoiseFloorMultiplier);
+        }
+
+        internal string GetVadDebugString()
+        {
+            return $"vadThreshold={GetVadThreshold():F4} noiseFloor={vadNoiseFloor:F4}";
+        }
+
+        // Falls quickly to quieter frames, rises slowly so sustained speech doesn't become "noise".
+        private void UpdateNoiseFloor(float energy)
+        {
+            var rate = energy < vadNoiseFloor ? 0.2f : 0.01f;
+            vadNoiseFloor += (energy - vadNoiseFloor) * rate;
+        }
 
         private static float ComputeRmsEnergy(short[] samples)
         {

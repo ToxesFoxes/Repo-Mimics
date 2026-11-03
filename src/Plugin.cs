@@ -29,15 +29,7 @@ namespace TFS_Mimics
         public static ConfigEntry<bool> configPersistAudioCache;
         public static ConfigEntry<int> configPersistMaxFilesPerPlayer;
         public static ConfigEntry<int> configNormalizeTarget;
-        internal static readonly string[] AvailableKeybinds = [
-            "A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
-            "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
-            "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3",
-            "4", "5", "6", "7", "8", "9", "F1", "F2", "F3", "F4",
-            "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "Space", "Return",
-            "Tab", "LeftShift", "RightShift", "LeftControl", "RightControl",
-            "Alpha0", "Alpha1", "Alpha2", "Alpha3", "Alpha4", "Alpha5", "Alpha6", "Alpha7", "Alpha8", "Alpha9"
-        ];
+        public static ConfigEntry<int> configVadSensitivity;
         public static readonly Dictionary<string, ConfigEntry<bool>> enemyConfigEntries = new Dictionary<string, ConfigEntry<bool>>();
 
         public static UnityEngine.KeyCode GetDebugMenuKey()
@@ -67,6 +59,7 @@ namespace TFS_Mimics
             configPersistAudioCache = /*           */ Config.Bind("General", "Persist Audio Cache", /*             */ false, /* */ "If true, received mimic audio clips are saved to disk and loaded on world entry.");
             configPersistMaxFilesPerPlayer = /*    */ Config.Bind("General", "Persist Max Files Per Player", /*    */ 100, /*   */ new ConfigDescription("Maximum number of persisted recordings to keep per player folder.", new AcceptableValueRange<int>(1, 5000), Array.Empty<object>()));
             configNormalizeTarget = /*             */ Config.Bind("General", "Normalize Target", /*                */ 85, /*    */ new ConfigDescription("Peak normalization target for voice and custom audio (0 = off, 100 = 0 dBFS).", new AcceptableValueRange<int>(0, 100), Array.Empty<object>()));
+            configVadSensitivity = /*              */ Config.Bind("General", "Voice Detection Sensitivity", /*     */ 85, /*    */ new ConfigDescription("How easily your voice starts a recording (higher = quieter speech is captured, but more background noise too).", new AcceptableValueRange<int>(0, 100), Array.Empty<object>()));
             #endregion
 
             #region Host Only
@@ -77,10 +70,13 @@ namespace TFS_Mimics
             #endregion
 
             configDebugVerbose = /*                */ Config.Bind("Debug", "Verbose Logging", /*                 */ false, /* */ "Enable very detailed debug logs for the whole mimic pipeline.");
-            configDebugMenuKey = /*                */ Config.Bind("Debug", "Menu Keybind", /*                    */ "F8", /*  */ new ConfigDescription("Keybind to open the Mimics debug menu in-game.", new AcceptableValueList<string>(AvailableKeybinds), Array.Empty<object>()));
+            configDebugMenuKey = /*                */ Config.Bind("Debug", "Menu Keybind", /*                    */ "F8", /*  */ new ConfigDescription("Keybind to open the Mimics debug menu in-game (UnityEngine.KeyCode name, e.g. F8, Insert, Keypad5). Can be rebound by key press in the debug menu Settings tab.", null, Array.Empty<object>()));
             configSamplingRate = /*                */ Config.Bind("Experimental", "Sampling Rate", /*            */ 48000, /* */ new ConfigDescription("Microphone/sample rate.", new AcceptableValueRange<int>(16000, 48000), Array.Empty<object>()));
 
             configFilterEnabled = /*               */ Config.Bind("Filter", "Filter Enabled?", false, "Enable per-enemy mimic filter.");
+
+            harmony = new Harmony("TFS_Mimics");
+            patches.SteamNetworkingCompat.Apply(harmony);
 
             RepoSteamNetwork.RegisterPacket<MimicsAudioPacket>();
             RepoSteamNetwork.AddCallback<MimicsAudioPacket>(TFS_Mimics.OnMimicsAudioPacketReceived);
@@ -94,7 +90,6 @@ namespace TFS_Mimics
             RepoSteamNetwork.RegisterPacket<SyncPlayCommandPacket>();
             RepoSteamNetwork.AddCallback<SyncPlayCommandPacket>(TFS_Mimics.OnSyncPlayCommandReceived);
 
-            harmony = new Harmony("TFS_Mimics");
             harmony.PatchAll();
 
             patches.EnemyDirectorStartPatch.Initialize(Config);

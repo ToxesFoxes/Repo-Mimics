@@ -37,6 +37,7 @@ namespace TFS_Mimics
         private string _settingMaxFilesBuf;
         private string _settingSamplingRateBuf;
         private string _settingNormalizeBuf;
+        private string _settingVadSensitivityBuf;
         private bool _settingsDirty;
         private Vector2 _scrollSettings;
         private Vector2 _scrollReadiness;
@@ -159,11 +160,12 @@ namespace TFS_Mimics
 
         // ─── Update Hook ─────────────────────────────────────────────────────────
         private bool _debugWindowFocused = true;
+        private ConfigEntry<string> _keybindListeningEntry;
 
         private void DebugGuiUpdate()
         {
             var menuKey = Plugin.GetDebugMenuKey();
-            if (Input.GetKeyDown(menuKey))
+            if (_keybindListeningEntry == null && Input.GetKeyDown(menuKey))
             {
                 var shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
                 if (shift && _debugWindowOpen)
@@ -185,6 +187,12 @@ namespace TFS_Mimics
                         _fpmOpen = false;
                     }
                 }
+            }
+
+            // Окно закрыто или ушли с вкладки Settings — отменить ожидание клавиши
+            if (!_debugWindowOpen || !_debugWindowFocused || _debugTab != 5)
+            {
+                _keybindListeningEntry = null;
             }
 
             // Клик внутри области окна восстанавливает фокус

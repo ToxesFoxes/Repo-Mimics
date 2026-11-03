@@ -40,8 +40,8 @@ This mod is incompatible with mods:
 Dependencies are pulled automatically:
 
 - BepInEx-BepInExPack-5.4.2305
-- nickklmao-REPOConfig-1.2.6
-- nickklmao-MenuLib-2.5.2
+- REPOModding-REPOConfig-1.2.7
+- REPOModding-MenuLib-2.6.0
 - Rune580-REPO_SteamNetworking_Lib-0.1.2
 
 ## ⚙️ Mod Settings

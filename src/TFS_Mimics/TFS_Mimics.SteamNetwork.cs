@@ -62,6 +62,27 @@ namespace TFS_Mimics
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
+    // Client → Host: "I dropped this voice sound" (memory limit / deleted)
+    // ─────────────────────────────────────────────────────────────────────────────
+    public class SoundForgetPacket : NetworkPacket<SoundForgetPacket>
+    {
+        public string SoundGuid { get; set; }
+        public int SenderActorNumber { get; set; }
+
+        protected override void WriteData(SocketMessage socketMessage)
+        {
+            socketMessage.Write(SenderActorNumber);
+            socketMessage.Write(SoundGuid);
+        }
+
+        protected override void ReadData(SocketMessage socketMessage)
+        {
+            SenderActorNumber = socketMessage.Read<int>();
+            SoundGuid = socketMessage.Read<string>();
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
     // Client → Host: full manifest of custom audio available on this client
     // ─────────────────────────────────────────────────────────────────────────────
     public class CustomSoundManifestPacket : NetworkPacket<CustomSoundManifestPacket>
@@ -159,6 +180,41 @@ namespace TFS_Mimics
             if (!PhotonNetwork.IsMasterClient) return;
             if (Instance == null) return;
             Instance.RegisterVoiceSoundReady(packet.SoundGuid, packet.SenderActorNumber);
+        }
+
+        internal static void OnSoundForgetPacketReceived(SoundForgetPacket packet)
+        {
+            if (!PhotonNetwork.IsMasterClient) return;
+            ForgetSoundReadiness(packet.SoundGuid, packet.SenderActorNumber);
+        }
+
+        // Called whenever this client drops a voice clip from memory.
+        private static void NotifyHostSoundForgotten(string soundGuid)
+        {
+            if (string.IsNullOrEmpty(soundGuid)) return;
+            var localActor = PhotonNetwork.LocalPlayer?.ActorNumber ?? -1;
+            if (localActor < 0) return;
+
+            if (SemiFunc.IsMasterClientOrSingleplayer())
+            {
+                ForgetSoundReadiness(soundGuid, localActor);
+            }
+            else if (PhotonNetwork.InRoom)
+            {
+                RepoSteamNetwork.SendPacket(new SoundForgetPacket { SoundGuid = soundGuid, SenderActorNumber = localActor }, NetworkDestination.HostOnly);
+            }
+        }
+
+        private static void ForgetSoundReadiness(string soundGuid, int actorNumber)
+        {
+            if (string.IsNullOrEmpty(soundGuid) || !soundReadinessMap.TryGetValue(soundGuid, out var set)) return;
+            set.Remove(actorNumber);
+            if (set.Count == 0)
+            {
+                soundReadinessMap.Remove(soundGuid);
+                _directorLastPlayed.Remove(soundGuid);
+                _directorPlayCount.Remove(soundGuid);
+            }
         }
 
         internal static void OnCustomSoundManifestReceived(CustomSoundManifestPacket packet)

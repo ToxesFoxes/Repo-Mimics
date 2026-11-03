@@ -519,7 +519,7 @@ namespace TFS_Mimics
         {
             switch (_debugTab)
             {
-                case TabRecordings: RebuildRecordingsCache(); break;
+                case TabRecordings: RebuildRecordingsCacheIfNeeded(); break;
                 case TabPlayers: RebuildPlayersTabCache(); break;
                 case TabNetwork:
                     RebuildVoiceLogCache();

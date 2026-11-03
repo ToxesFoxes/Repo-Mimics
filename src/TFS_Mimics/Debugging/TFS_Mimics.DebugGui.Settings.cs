@@ -47,6 +47,19 @@ namespace TFS_Mimics
 
             GUILayout.Space(4f);
 
+            // ── Director (host) ────────────────────────────────────────────────
+            DrawSettingsSection("Director (host only)");
+
+            DrawSettingToggle("Smart Director", Plugin.configSmartDirector);
+            DrawSettingToggle("Event: Player Death", Plugin.configEventDeath);
+            DrawSettingToggle("Event: Player Hurt", Plugin.configEventHurt);
+            DrawSettingToggle("Event: Enemy Spotted Player", Plugin.configEventSpotted);
+            DrawSettingToggle("Event: Valuable Broken", Plugin.configEventBreak);
+            DrawSettingToggle("Event: Head Grabber Talks", Plugin.configEventHeadTalk);
+            DrawSettingToggle("Event: Valuable Picked Up", Plugin.configEventPickup);
+
+            GUILayout.Space(4f);
+
             // ── Persistence ────────────────────────────────────────────────────
             DrawSettingsSection("Persistence");
 

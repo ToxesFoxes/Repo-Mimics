@@ -44,6 +44,26 @@ namespace TFS_Mimics
         private AudioClip _previewOwnedClip;   // clip we created for a voice preview (custom clips are not ours)
         private object _previewKey;
 
+        // Rebuild only when the cache, filter, sort or page changed — plus a slow refresh for ages/play counts.
+        private int _recBuiltVersion = -1;
+        private string _recBuiltKey;
+        private float _recBuiltAt;
+        private bool _recWaveformsPending;
+
+        private void RebuildRecordingsCacheIfNeeded()
+        {
+            var key = $"{_recFilter}|{_recSort}|{_recPage}|{_customAudioClips.Count}";
+            if (_recBuiltVersion == cachedAudioVersion && _recBuiltKey == key && !_recWaveformsPending && Time.unscaledTime - _recBuiltAt < 2f)
+            {
+                return;
+            }
+
+            _recBuiltVersion = cachedAudioVersion;
+            _recBuiltKey = key;
+            _recBuiltAt = Time.unscaledTime;
+            RebuildRecordingsCache();
+        }
+
         private void RebuildRecordingsCache()
         {
             var localId = PhotonNetwork.LocalPlayer != null ? GetPlayerPersistentId(PhotonNetwork.LocalPlayer) : string.Empty;
@@ -98,13 +118,14 @@ namespace TFS_Mimics
             // Build a few waveforms per rebuild (visible page first) to avoid frame spikes.
             var built = 0;
             var start = _recPage * RecordingsPerPage;
-            for (var i = start; i < _recRows.Count && built < WaveformsPerRebuild; i++)
+            var end = Mathf.Min(start + RecordingsPerPage, _recRows.Count);
+            _recWaveformsPending = false;
+            for (var i = start; i < end; i++)
             {
-                if (_recRows[i].Waveform == null)
-                {
-                    BuildWaveform(_recRows[i]);
-                    built++;
-                }
+                if (_recRows[i].Waveform != null) continue;
+                if (built >= WaveformsPerRebuild) { _recWaveformsPending = true; break; }
+                BuildWaveform(_recRows[i]);
+                built++;
             }
         }
 

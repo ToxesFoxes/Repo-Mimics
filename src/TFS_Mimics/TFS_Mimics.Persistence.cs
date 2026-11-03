@@ -476,6 +476,7 @@ namespace TFS_Mimics
             }
 
             entry.Pinned = pinned;
+            cachedAudioVersion++;
             if (string.IsNullOrWhiteSpace(entry.FilePath))
             {
                 return; // persistence off: pin lives only for this session
@@ -509,7 +510,7 @@ namespace TFS_Mimics
                 SetEntryPinned(entry, false);
             }
 
-            cachedAudio.Remove(entry);
+            RemoveFromAudioCache(entry);
 
             if (!string.IsNullOrWhiteSpace(entry.FilePath))
             {

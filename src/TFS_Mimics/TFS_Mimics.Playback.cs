@@ -140,6 +140,11 @@ namespace TFS_Mimics
                         return false;
                     }
 
+                    if (IsOwnVoice(e) && !Plugin.configHearYourself.Value)
+                    {
+                        return false;
+                    }
+
                     var entryPlayerId = !string.IsNullOrWhiteSpace(e.SourcePlayerId) ? e.SourcePlayerId : (e.SourceActor >= 0 ? $"actor_{e.SourceActor}" : "unknown");
                     return onlinePlayerIds.Contains(entryPlayerId);
                 })
@@ -883,7 +888,7 @@ namespace TFS_Mimics
             var guid = packet.SoundGuid;
             if (string.IsNullOrEmpty(guid) || packet.EnemyViewIds == null || packet.EnemyViewIds.Length == 0) return;
 
-            var voiceEntry = cachedAudio.FirstOrDefault(e => e?.SoundGuid == guid);
+            var voiceEntry = FindCachedAudio(guid);
             if (voiceEntry != null)
             {
                 foreach (var viewId in packet.EnemyViewIds)
@@ -907,10 +912,26 @@ namespace TFS_Mimics
             DLog($"HandleSyncPlayCommand: no audio found for guid={guid}");
         }
 
+        private static bool IsOwnVoice(CachedAudioEntry entry)
+        {
+            var local = PhotonNetwork.LocalPlayer;
+            if (entry == null || local == null) return false;
+            if (entry.SourceActor == local.ActorNumber) return true;
+            return !string.IsNullOrWhiteSpace(entry.SourcePlayerId)
+                && string.Equals(entry.SourcePlayerId, GetPlayerPersistentId(local), System.StringComparison.OrdinalIgnoreCase);
+        }
+
         private void PlayVoiceEntryOnEnemy(CachedAudioEntry entry, int enemyViewId, int voiceFilterMode)
         {
             var enemyGo = GetEnemyGameObjectByViewId(enemyViewId);
             if (enemyGo == null) return;
+
+            // Host commands are broadcast to everyone; "Hear Yourself? = false" is honoured here, on the listener.
+            if (IsOwnVoice(entry) && !Plugin.configHearYourself.Value)
+            {
+                DLog($"SyncPlay: skipped own voice guid={entry.SoundGuid} (Hear Yourself off)");
+                return;
+            }
 
             var samples = ConvertByteArrayToFloatArray(entry.AudioData, voiceFilterMode, entry.SampleRate);
             var clip = AudioClip.Create("SyncVoiceClip", samples.Length, 1, entry.SampleRate, false);

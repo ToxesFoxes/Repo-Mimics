@@ -41,7 +41,10 @@ namespace TFS_Mimics
         private const int TabNetwork = 3;
         private const int TabOverlays = 4;
         private const int TabSettings = 5;
-        private static readonly string[] TabNames = { "Recordings", "Mobs", "Players", "Network", "Overlays", "Settings" };
+        private const int TabDirector = 6;
+        private static readonly string[] TabNames = { "Recordings", "Mobs", "Players", "Network", "Overlays", "Settings", "Director" };
+        // Sidebar order (indices are kept stable for the saved window state)
+        private static readonly int[] TabOrder = { TabRecordings, TabDirector, TabMobs, TabPlayers, TabNetwork, TabOverlays, TabSettings };
 
         // ─── Settings Tab State ───────────────────────────────────────────────────
         private string _settingVolumeBuf;
@@ -419,6 +422,7 @@ namespace TFS_Mimics
                 case TabNetwork: DrawNetworkTab(scrollH); break;
                 case TabOverlays: DrawOverlaysTab(scrollH); break;
                 case TabSettings: DrawSettingsTab(scrollH); break;
+                case TabDirector: DrawDirectorTab(scrollH); break;
             }
             GUILayout.EndVertical();
 
@@ -437,7 +441,7 @@ namespace TFS_Mimics
         private void DrawSidebar(float height)
         {
             GUILayout.BeginVertical(GUILayout.Width(SidebarWidth), GUILayout.Height(height));
-            for (var i = 0; i < TabNames.Length; i++)
+            foreach (var i in TabOrder)
             {
                 var active = _debugTab == i;
                 var rect = GUILayoutUtility.GetRect(new GUIContent(TabNames[i]), active ? _gsNavItemActive : _gsNavItem,
@@ -479,6 +483,7 @@ namespace TFS_Mimics
                 case TabRecordings: return cachedAudio.Count + _customAudioClips.Count > 0 ? $"  {cachedAudio.Count + _customAudioClips.Count}" : string.Empty;
                 case TabMobs: return nearestPlaybackCandidatesHud.Count > 0 && SemiFunc.RunIsLevel() ? $"  {nearestPlaybackCandidatesHud.Count}" : string.Empty;
                 case TabNetwork: return incomingAudioTransmissions.Count > 0 ? $"  ●{incomingAudioTransmissions.Count}" : string.Empty;
+                case TabDirector: return _directorPending.Count > 0 ? $"  ●{_directorPending.Count}" : string.Empty;
                 default: return string.Empty;
             }
         }

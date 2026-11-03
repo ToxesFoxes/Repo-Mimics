@@ -321,9 +321,20 @@ namespace TFS_Mimics
 
         private float GetVadThreshold()
         {
-            var sensitivity = Mathf.Clamp01((Plugin.configVadSensitivity?.Value ?? 85) / 100f);
-            var floor = Mathf.Lerp(VadThresholdAtMinSensitivity, VadThresholdAtMaxSensitivity, sensitivity);
+            var floor = ThresholdForSensitivity(Plugin.configVadSensitivity?.Value ?? 85);
             return Mathf.Max(floor, vadNoiseFloor * VadNoiseFloorMultiplier);
+        }
+
+        // Sensitivity (0..100) <-> minimum VAD threshold; shared with the setup wizard.
+        internal static float ThresholdForSensitivity(int sensitivity)
+        {
+            return Mathf.Lerp(VadThresholdAtMinSensitivity, VadThresholdAtMaxSensitivity, Mathf.Clamp01(sensitivity / 100f));
+        }
+
+        internal static int SensitivityForThreshold(float threshold)
+        {
+            var t = Mathf.InverseLerp(VadThresholdAtMinSensitivity, VadThresholdAtMaxSensitivity, threshold);
+            return Mathf.Clamp(Mathf.RoundToInt(t * 100f), 0, 100);
         }
 
         // ─── Mic meter (debug menu) ───────────────────────────────────────────────

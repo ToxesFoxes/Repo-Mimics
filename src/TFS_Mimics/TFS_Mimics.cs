@@ -117,17 +117,60 @@ namespace TFS_Mimics
         // Static: survives component destruction between levels (PlayerAvatar is recreated per-level)
         private static readonly List<CachedAudioEntry> cachedAudio = new List<CachedAudioEntry>();
 
+        // O(1) lookups for host commands / director; and a version so UI lists rebuild only on change.
+        private static readonly Dictionary<string, CachedAudioEntry> cachedAudioByGuid = new Dictionary<string, CachedAudioEntry>();
+        private static int cachedAudioVersion;
+
+        private static CachedAudioEntry FindCachedAudio(string guid)
+        {
+            return !string.IsNullOrEmpty(guid) && cachedAudioByGuid.TryGetValue(guid, out var e) ? e : null;
+        }
+
+        private static string GetEntryPlayerKey(CachedAudioEntry e)
+        {
+            return !string.IsNullOrWhiteSpace(e.SourcePlayerId) ? e.SourcePlayerId : $"actor_{e.SourceActor}";
+        }
+
         private static void AddToAudioCache(CachedAudioEntry entry)
         {
             if (entry == null) return;
             if (!string.IsNullOrEmpty(entry.SoundGuid))
             {
-                if (cachedAudio.Any(e => e.SoundGuid == entry.SoundGuid))
+                if (cachedAudioByGuid.ContainsKey(entry.SoundGuid))
                 {
                     return;
                 }
+                cachedAudioByGuid[entry.SoundGuid] = entry;
             }
             cachedAudio.Add(entry);
+            cachedAudioVersion++;
+            EnforceMemoryLimit(GetEntryPlayerKey(entry));
+        }
+
+        private static void RemoveFromAudioCache(CachedAudioEntry entry)
+        {
+            if (entry == null || !cachedAudio.Remove(entry)) return;
+            if (!string.IsNullOrEmpty(entry.SoundGuid))
+            {
+                cachedAudioByGuid.Remove(entry.SoundGuid);
+                NotifyHostSoundForgotten(entry.SoundGuid);
+            }
+            cachedAudioVersion++;
+        }
+
+        // Long sessions: keep at most N clips per player in memory (oldest unpinned go first).
+        // Evicted clips stay on disk; their paths stay in loadedPersistedFiles so they aren't reloaded.
+        private static void EnforceMemoryLimit(string playerKey)
+        {
+            var limit = Plugin.configMaxClipsInMemory?.Value ?? 40;
+            var own = cachedAudio.Where(e => e != null && GetEntryPlayerKey(e) == playerKey).ToList();
+            var excess = own.Count - limit;
+            if (excess <= 0) return;
+
+            foreach (var old in own.Where(e => !e.Pinned).OrderBy(e => e.ReceivedAt).Take(excess).ToList())
+            {
+                RemoveFromAudioCache(old);
+            }
         }
 
         private string currentPlaybackEnemyName = "None";
@@ -202,6 +245,8 @@ namespace TFS_Mimics
                 DestroyAllOverlays();
                 SetCursorForGui(false);
             }
+
+            DirectorUpdate();
 
             if (!IsDebugGuiAllowedHere())
             {
@@ -302,6 +347,7 @@ namespace TFS_Mimics
 
             if (photonView.IsMine && SemiFunc.RunIsLevel())
             {
+                PublishHearSelfPreference();
                 EnsurePersistenceInitialized();
                 EnsureCustomAudioLoaded();
                 StartRecording();

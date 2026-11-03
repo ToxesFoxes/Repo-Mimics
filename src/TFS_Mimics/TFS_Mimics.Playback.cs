@@ -140,6 +140,11 @@ namespace TFS_Mimics
                         return false;
                     }
 
+                    if (IsOwnVoice(e) && !Plugin.configHearYourself.Value)
+                    {
+                        return false;
+                    }
+
                     var entryPlayerId = !string.IsNullOrWhiteSpace(e.SourcePlayerId) ? e.SourcePlayerId : (e.SourceActor >= 0 ? $"actor_{e.SourceActor}" : "unknown");
                     return onlinePlayerIds.Contains(entryPlayerId);
                 })
@@ -159,7 +164,8 @@ namespace TFS_Mimics
             {
                 var entry = playableEntries[idx];
                 DLog($"TryPlayRandomCachedAudio: selected cached clip idx={idx} source={entry.SourceActor}:{entry.SourceName} playerId={entry.SourcePlayerId} bytes={entry.AudioData.Length} age={Time.time - entry.ReceivedAt:F1}s {DebugContext()}");
-                PlayReceivedAudio(entry.AudioData, entry.SampleRate, entry.SourceActor, entry.SourcePlayerId, entry.SourceName);
+                if (PlayReceivedAudio(entry.AudioData, entry.SampleRate, entry.SourceActor, entry.SourcePlayerId, entry.SourceName))
+                    entry.PlayCount++;
             }
             else
             {
@@ -169,7 +175,7 @@ namespace TFS_Mimics
             }
         }
 
-        private void PlayReceivedAudio(byte[] audioData, int senderSampleRate, int sourceActor, string sourcePlayerId, string sourceName)
+        private bool PlayReceivedAudio(byte[] audioData, int senderSampleRate, int sourceActor, string sourcePlayerId, string sourceName)
         {
             var playbackFilterEnabled = Plugin.configPlaybackVoiceFilterEnabled == null || Plugin.configPlaybackVoiceFilterEnabled.Value;
             var applyVoiceFilter = playbackFilterEnabled && UnityEngine.Random.value > 0.9f;
@@ -197,7 +203,7 @@ namespace TFS_Mimics
                 nearestPlaybackTargetsHud.Clear();
                 nearestPlaybackTargetsHud.Add("No candidates");
                 DLog($"No playback targets found, clip will not be played {DebugContext()}");
-                return;
+                return false;
             }
 
             var listenerPos = transform.position;
@@ -207,7 +213,7 @@ namespace TFS_Mimics
             if (nearestPlaybackCandidatesHud.Count == 0)
             {
                 DLog($"No nearest HUD candidates after refresh, clip will not be played {DebugContext()}");
-                return;
+                return false;
             }
 
             var inRadiusCandidates = nearestPlaybackCandidatesHud
@@ -217,7 +223,7 @@ namespace TFS_Mimics
             if (inRadiusCandidates.Count == 0)
             {
                 DLog($"Skipping playback: no candidates inside playback radius radius={nearRadius:F1} nearestCount={nearestPlaybackCandidatesHud.Count} {DebugContext()}");
-                return;
+                return false;
             }
 
             var selected = inRadiusCandidates[UnityEngine.Random.Range(0, inRadiusCandidates.Count)];
@@ -227,7 +233,7 @@ namespace TFS_Mimics
             if (sourceComponent == null)
             {
                 Log.LogWarning($"Playback skipped: failed to get reusable audio source enemy={selected.EnemyName} {DebugContext()}");
-                return;
+                return false;
             }
 
             sourceComponent.clip = clip;
@@ -250,17 +256,12 @@ namespace TFS_Mimics
             DLog($"AudioSource.Play() called: isActiveAndEnabled={sourceComponent.isActiveAndEnabled} mute={sourceComponent.mute} pitch={sourceComponent.pitch} volume={sourceComponent.volume:F2} spatialBlend={sourceComponent.spatialBlend} pos={FormatHudVector(sourceComponent.transform.position)} {DebugContext()}");
             var playbackEndsAt = Time.time + clip.length + 0.1f;
             var targetKey = GetPlaybackTargetKey(selected.Enemy, selected.Target);
-            if (targetKey != 0)
-            {
-                playbackBusyUntilByTargetKey[targetKey] = playbackEndsAt;
-                playbackStartedAtByTargetKey[targetKey] = Time.time;
-                playbackClipLengthByTargetKey[targetKey] = clip.length;
-            }
-
             currentPlaybackEnemyName = selected.EnemyName;
             currentPlaybackSourcePlayerId = string.IsNullOrWhiteSpace(sourcePlayerId)
                 ? (sourceActor >= 0 ? $"actor_{sourceActor}" : "unknown")
                 : sourcePlayerId;
+            TrackPlaybackStart(targetKey, clip.length, selected.EnemyName,
+                !string.IsNullOrWhiteSpace(sourceName) ? sourceName : currentPlaybackSourcePlayerId);
             hudTrackedEnemy = selected.Enemy;
             hudTrackedTarget = selected.Target;
             hudLastSelectedEnemyPos = selected.Position;
@@ -270,6 +271,27 @@ namespace TFS_Mimics
             // The AudioSource proxy is parented to the moving Enemy Controller,
             // so its world position is updated automatically each frame.
             StartCoroutine(ResetReusableAudioSourceAfterDelay(sourceComponent, clip.length + 0.1f));
+            return true;
+        }
+
+        // Single bookkeeping point for every playback path (busy flag + debug-menu "now playing" list).
+        private void TrackPlaybackStart(int targetKey, float clipLength, string enemyName, string source)
+        {
+            if (targetKey == 0)
+            {
+                return;
+            }
+
+            playbackBusyUntilByTargetKey[targetKey] = Time.time + clipLength + 0.1f;
+            playbackStartedAtByTargetKey[targetKey] = Time.time;
+            playbackClipLengthByTargetKey[targetKey] = clipLength;
+            activePlaybacks[targetKey] = new ActivePlayback
+            {
+                EnemyName = enemyName,
+                Source = source,
+                StartedAt = Time.time,
+                Length = clipLength
+            };
         }
 
         // Returns the AudioMixerGroup from the enemy's own AudioSources,
@@ -324,6 +346,7 @@ namespace TFS_Mimics
                 playbackBusyUntilByTargetKey.Remove(key);
                 playbackStartedAtByTargetKey.Remove(key);
                 playbackClipLengthByTargetKey.Remove(key);
+                activePlaybacks.Remove(key);
             }
         }
 
@@ -865,7 +888,7 @@ namespace TFS_Mimics
             var guid = packet.SoundGuid;
             if (string.IsNullOrEmpty(guid) || packet.EnemyViewIds == null || packet.EnemyViewIds.Length == 0) return;
 
-            var voiceEntry = cachedAudio.FirstOrDefault(e => e?.SoundGuid == guid);
+            var voiceEntry = FindCachedAudio(guid);
             if (voiceEntry != null)
             {
                 foreach (var viewId in packet.EnemyViewIds)
@@ -889,15 +912,33 @@ namespace TFS_Mimics
             DLog($"HandleSyncPlayCommand: no audio found for guid={guid}");
         }
 
+        private static bool IsOwnVoice(CachedAudioEntry entry)
+        {
+            var local = PhotonNetwork.LocalPlayer;
+            if (entry == null || local == null) return false;
+            if (entry.SourceActor == local.ActorNumber) return true;
+            return !string.IsNullOrWhiteSpace(entry.SourcePlayerId)
+                && string.Equals(entry.SourcePlayerId, GetPlayerPersistentId(local), System.StringComparison.OrdinalIgnoreCase);
+        }
+
         private void PlayVoiceEntryOnEnemy(CachedAudioEntry entry, int enemyViewId, int voiceFilterMode)
         {
             var enemyGo = GetEnemyGameObjectByViewId(enemyViewId);
             if (enemyGo == null) return;
 
+            // Host commands are broadcast to everyone; "Hear Yourself? = false" is honoured here, on the listener.
+            if (IsOwnVoice(entry) && !Plugin.configHearYourself.Value)
+            {
+                DLog($"SyncPlay: skipped own voice guid={entry.SoundGuid} (Hear Yourself off)");
+                return;
+            }
+
             var samples = ConvertByteArrayToFloatArray(entry.AudioData, voiceFilterMode, entry.SampleRate);
             var clip = AudioClip.Create("SyncVoiceClip", samples.Length, 1, entry.SampleRate, false);
             clip.SetData(samples, 0);
-            PlayClipOnEnemyGameObject(clip, enemyGo, GetVolumeForPlayer(entry.SourcePlayerId));
+            var source = !string.IsNullOrWhiteSpace(entry.SourceName) ? entry.SourceName : entry.SourcePlayerId;
+            if (PlayClipOnEnemyGameObject(clip, enemyGo, GetVolumeForPlayer(entry.SourcePlayerId), source))
+                entry.PlayCount++;
         }
 
         private void PlayCustomEntryOnEnemy(CustomAudioEntry entry, int enemyViewId)
@@ -912,13 +953,14 @@ namespace TFS_Mimics
                 entry.IsNormalized = true;
             }
 
-            PlayClipOnEnemyGameObject(entry.Clip, enemyGo, GetVolumeForPlayer("custom"));
+            if (PlayClipOnEnemyGameObject(entry.Clip, enemyGo, GetVolumeForPlayer("custom"), entry.FileName))
+                entry.PlayCount++;
         }
 
-        private void PlayClipOnEnemyGameObject(AudioClip clip, GameObject enemyGo, float volume)
+        private bool PlayClipOnEnemyGameObject(AudioClip clip, GameObject enemyGo, float volume, string sourceLabel)
         {
             var sourceComponent = GetOrCreateReusableEnemyAudioSource(enemyGo, null, enemyGo.transform.position);
-            if (sourceComponent == null) return;
+            if (sourceComponent == null) return false;
 
             sourceComponent.clip = clip;
             sourceComponent.volume = volume;
@@ -936,12 +978,7 @@ namespace TFS_Mimics
             sourceComponent.Play();
 
             var targetKey = GetPlaybackTargetKey(enemyGo, null);
-            if (targetKey != 0)
-            {
-                playbackBusyUntilByTargetKey[targetKey] = Time.time + clip.length + 0.1f;
-                playbackStartedAtByTargetKey[targetKey] = Time.time;
-                playbackClipLengthByTargetKey[targetKey] = clip.length;
-            }
+            TrackPlaybackStart(targetKey, clip.length, NormalizeEnemyName(enemyGo.name), sourceLabel);
 
             currentPlaybackEnemyName = NormalizeEnemyName(enemyGo.name);
             currentPlaybackSourcePlayerId = "sync";
@@ -952,6 +989,7 @@ namespace TFS_Mimics
 
             DLog($"SyncPlay: clip on enemy={enemyGo.name} len={clip.length:F2}s vol={volume:F2}");
             StartCoroutine(ResetReusableAudioSourceAfterDelay(sourceComponent, clip.length + 0.1f));
+            return true;
         }
 
         // ─── Phase 6: Mob identification helper ───────────────────────────────────

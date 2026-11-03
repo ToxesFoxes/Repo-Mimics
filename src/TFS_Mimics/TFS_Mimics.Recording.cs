@@ -183,7 +183,14 @@ namespace TFS_Mimics
 
         public void ProcessVoiceData(short[] voiceData)
         {
-            if (!isRecording || !photonView.IsMine)
+            if (!photonView.IsMine)
+            {
+                return;
+            }
+
+            UpdateMicMeter(voiceData);
+
+            if (!isRecording)
             {
                 return;
             }
@@ -200,12 +207,16 @@ namespace TFS_Mimics
 
             // RMS energy-based voice activity detection — no reflection into PlayerVoiceChat internals.
             var energy = ComputeRmsEnergy(voiceData);
-            if (energy > VadEnergyThreshold)
+            var isTalking = Time.time < vadHoldUntil;
+            if (energy > GetVadThreshold())
             {
                 vadHoldUntil = Time.time + VadHoldSeconds;
+                isTalking = true;
             }
-
-            var isTalking = Time.time < vadHoldUntil;
+            else if (!isTalking)
+            {
+                UpdateNoiseFloor(energy);
+            }
 
             if (isTalking && !capturingSpeech)
             {
@@ -298,8 +309,64 @@ namespace TFS_Mimics
 
         // Voice activity detection using per-frame RMS energy.
         // This avoids reflecting into PlayerVoiceChat private state entirely.
-        private const float VadEnergyThreshold = 0.012f;
+        // Since 0.5.0 the captured mic stream is raw (no OS AGC), speech sits around 0.007–0.03 RMS,
+        // so the threshold is a sensitivity-based floor raised above the tracked background noise.
+        // 0 = pre-0.5.0 threshold, default 85 ≈ 0.0027 (tuned in-game).
+        private const float VadThresholdAtMinSensitivity = 0.012f;
+        private const float VadThresholdAtMaxSensitivity = 0.001f;
+        private const float VadNoiseFloorMultiplier = 3f;
         private const float VadHoldSeconds = 0.5f;
+
+        private float vadNoiseFloor;
+
+        private float GetVadThreshold()
+        {
+            var floor = ThresholdForSensitivity(Plugin.configVadSensitivity?.Value ?? 85);
+            return Mathf.Max(floor, vadNoiseFloor * VadNoiseFloorMultiplier);
+        }
+
+        // Sensitivity (0..100) <-> minimum VAD threshold; shared with the setup wizard.
+        internal static float ThresholdForSensitivity(int sensitivity)
+        {
+            return Mathf.Lerp(VadThresholdAtMinSensitivity, VadThresholdAtMaxSensitivity, Mathf.Clamp01(sensitivity / 100f));
+        }
+
+        internal static int SensitivityForThreshold(float threshold)
+        {
+            var t = Mathf.InverseLerp(VadThresholdAtMinSensitivity, VadThresholdAtMaxSensitivity, threshold);
+            return Mathf.Clamp(Mathf.RoundToInt(t * 100f), 0, 100);
+        }
+
+        // ─── Mic meter (debug menu) ───────────────────────────────────────────────
+        private float _micLevel;        // last frame RMS
+        private float _micPeakHold;     // decaying peak for the meter
+        private float _micLevelAt;      // Time.time of the last frame
+
+        private void UpdateMicMeter(short[] voiceData)
+        {
+            var rms = ComputeRmsEnergy(voiceData);
+            _micLevel = rms;
+            _micPeakHold = Mathf.Max(rms, _micPeakHold * 0.92f);
+            _micLevelAt = Time.time;
+
+            // Keep the noise floor fresh between recording cycles too, so the meter's markers stay meaningful.
+            if (!isRecording && rms <= GetVadThreshold())
+            {
+                UpdateNoiseFloor(rms);
+            }
+        }
+
+        internal string GetVadDebugString()
+        {
+            return $"vadThreshold={GetVadThreshold():F4} noiseFloor={vadNoiseFloor:F4}";
+        }
+
+        // Falls quickly to quieter frames, rises slowly so sustained speech doesn't become "noise".
+        private void UpdateNoiseFloor(float energy)
+        {
+            var rate = energy < vadNoiseFloor ? 0.2f : 0.01f;
+            vadNoiseFloor += (energy - vadNoiseFloor) * rate;
+        }
 
         private static float ComputeRmsEnergy(short[] samples)
         {

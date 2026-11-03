@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using BepInEx;
 using BepInEx.Configuration;
 using Photon.Pun;
 using UnityEngine;
@@ -10,24 +13,38 @@ namespace TFS_Mimics
     {
         // ─── Window State ────────────────────────────────────────────────────────
         private bool _debugWindowOpen;
+        private bool _debugWindowCollapsed;
         private bool _showGizmos;
-        private Rect _debugWindowRect = new Rect(20f, 20f, 520f, 500f);
+        private Rect _debugWindowRect = new Rect(20f, 20f, 640f, 520f);
+        private float _debugWindowExpandedHeight = 520f;
         private int _debugTab;
-        private Vector2 _scrollMobs, _scrollPlayers, _scrollCache, _scrollVoiceLog, _scrollVoiceLogOut, _scrollOverlays;
+        private Vector2 _scrollMobs, _scrollPlayers, _scrollRecordings, _scrollVoiceLog, _scrollVoiceLogOut, _scrollOverlays;
         private const int VoiceLogMaxEntries = 200;
         private readonly List<VoiceLogEntry> _voiceLog = new List<VoiceLogEntry>();
-        private readonly HashSet<string> _cacheExpandedPlayers = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
 
         private bool _isResizing;
         private Vector2 _resizeMouseStart;
         private Rect _resizeRectStart;
+
+        private const float MinWindowWidth = 560f;
+        private const float MinWindowHeight = 360f;
+        private const float SidebarWidth = 112f;
 
         // ─── Enemy Overlay Manager ────────────────────────────────────────────────
         private readonly Dictionary<int, MimicsEnemyOverlay> _enemyOverlays = new Dictionary<int, MimicsEnemyOverlay>();
         private readonly Dictionary<int, MimicsAudioMarker> _audioMarkers = new Dictionary<int, MimicsAudioMarker>();
         private float _overlayNextRefresh;
 
-        private static readonly string[] TabNames = { "Mobs", "Players", "Cache", "Voice Log", "Overlays", "Settings" };
+        private const int TabRecordings = 0;
+        private const int TabMobs = 1;
+        private const int TabPlayers = 2;
+        private const int TabNetwork = 3;
+        private const int TabOverlays = 4;
+        private const int TabSettings = 5;
+        private const int TabDirector = 6;
+        private static readonly string[] TabNames = { "Recordings", "Mobs", "Players", "Network", "Overlays", "Settings", "Director" };
+        // Sidebar order (indices are kept stable for the saved window state)
+        private static readonly int[] TabOrder = { TabRecordings, TabDirector, TabMobs, TabPlayers, TabNetwork, TabOverlays, TabSettings };
 
         // ─── Settings Tab State ───────────────────────────────────────────────────
         private string _settingVolumeBuf;
@@ -37,6 +54,7 @@ namespace TFS_Mimics
         private string _settingMaxFilesBuf;
         private string _settingSamplingRateBuf;
         private string _settingNormalizeBuf;
+        private string _settingVadSensitivityBuf;
         private bool _settingsDirty;
         private Vector2 _scrollSettings;
         private Vector2 _scrollReadiness;
@@ -54,17 +72,14 @@ namespace TFS_Mimics
         private int _cachedPlayersWithClips;
         private int _playersPage;
 
-        // VoiceLog tab
+        // VoiceLog (Network tab)
         private readonly List<VoiceLogEntry> _cachedVoiceLogIn = new List<VoiceLogEntry>();
         private readonly List<VoiceLogEntry> _cachedVoiceLogOut = new List<VoiceLogEntry>();
         private int _cachedVoiceLogInProgress;
 
-        // Cache tab
-        private readonly List<(string pid, string name, List<int> indices, float lastAt)> _cachedCacheTabSorted = new List<(string pid, string name, List<int> indices, float lastAt)>();
-        private int _cachedCacheTabEligibleCount;
+        // Readiness (Network tab)
+        private int _cachedReadinessEligibleCount;
         private readonly Dictionary<string, bool> _cachedReadinessEligible = new Dictionary<string, bool>();
-        private int _cachePage;
-        private readonly Dictionary<string, int> _cachePlayerPages = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         // ─── Force-Play Modal State ──────────────────────────────────────────────
         private bool _fpmOpen;
@@ -114,11 +129,11 @@ namespace TFS_Mimics
 
         // ─── GUI Styles & Textures ───────────────────────────────────────────────
         private bool _guiStylesInit;
-        private GUIStyle _gsWindow, _gsH1, _gsLabel, _gsLabelDim, _gsSmall;
-        private GUIStyle _gsBtn, _gsBtnPrimary, _gsBtnDanger, _gsBtnYellow;
-        private GUIStyle _gsTabBtn, _gsTabBtnActive;
+        private GUIStyle _gsWindow, _gsH1, _gsLabel, _gsLabelDim, _gsSmall, _gsTitle;
+        private GUIStyle _gsBtn, _gsBtnPrimary, _gsBtnDanger, _gsBtnYellow, _gsIconBtn;
+        private GUIStyle _gsTabBtn, _gsTabBtnActive, _gsNavItem, _gsNavItemActive, _gsChip;
         private GUIStyle _gsListItem, _gsListItemSel;
-        private GUIStyle _gsPanelBox, _gsModalTitle;
+        private GUIStyle _gsPanelBox, _gsModalTitle, _gsRow, _gsRowAlt;
 
         private Texture2D _txWhite, _txBgDark, _txBgPanel, _txBgHover;
         private Texture2D _txAccent, _txAccentDim, _txGreen, _txRed, _txYellow;
@@ -128,11 +143,14 @@ namespace TFS_Mimics
         private static readonly Color CGreen = new Color(0.27f, 0.87f, 0.42f);
         private static readonly Color CRed = new Color(1.00f, 0.33f, 0.33f);
         private static readonly Color CYellow = new Color(1.00f, 0.84f, 0.20f);
+        private static readonly Color CCustom = new Color(0.55f, 0.85f, 0.40f);
         private static readonly Color CText = new Color(0.90f, 0.92f, 0.94f);
         private static readonly Color CTextDim = new Color(0.50f, 0.54f, 0.58f);
         private static readonly Color CBgDark = new Color(0.07f, 0.09f, 0.11f, 0.97f);
         private static readonly Color CBgPanel = new Color(0.11f, 0.14f, 0.17f, 1.00f);
         private static readonly Color CBgHover = new Color(0.18f, 0.22f, 0.27f, 1.00f);
+        private static readonly Color CBgTrack = new Color(0.15f, 0.19f, 0.24f);
+        private static readonly Color CLine = new Color(0.17f, 0.21f, 0.26f);
 
         // ─── Cursor State ─────────────────────────────────────────────────────────
         private CursorLockMode _savedCursorLockMode;
@@ -157,13 +175,22 @@ namespace TFS_Mimics
             }
         }
 
+        // The menu works in levels, the shop and the truck lobby; enemy-related data only exists in levels.
+        private static bool IsDebugGuiAllowedHere()
+        {
+            return SemiFunc.RunIsLevel() || SemiFunc.RunIsShop() || SemiFunc.RunIsLobby();
+        }
+
         // ─── Update Hook ─────────────────────────────────────────────────────────
         private bool _debugWindowFocused = true;
+        private ConfigEntry<string> _keybindListeningEntry;
 
         private void DebugGuiUpdate()
         {
+            EnsureWindowStateLoaded();
+
             var menuKey = Plugin.GetDebugMenuKey();
-            if (Input.GetKeyDown(menuKey))
+            if (_keybindListeningEntry == null && Input.GetKeyDown(menuKey))
             {
                 var shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
                 if (shift && _debugWindowOpen)
@@ -183,8 +210,15 @@ namespace TFS_Mimics
                     else
                     {
                         _fpmOpen = false;
+                        StopRecordingPreview();
                     }
                 }
+            }
+
+            // Окно закрыто или ушли с вкладки Settings — отменить ожидание клавиши
+            if (!_debugWindowOpen || !_debugWindowFocused || _debugTab != TabSettings)
+            {
+                _keybindListeningEntry = null;
             }
 
             // Клик внутри области окна восстанавливает фокус
@@ -200,18 +234,21 @@ namespace TFS_Mimics
             var needsCursor = _debugWindowOpen && _debugWindowFocused;
             SetCursorForGui(needsCursor);
 
+            SaveWindowStateIfChanged();
+
             if (!_debugWindowOpen)
             {
                 return;
             }
 
-            if (Time.time >= hudNextRefreshAt)
+            var inLevel = SemiFunc.RunIsLevel();
+            if (inLevel && Time.time >= hudNextRefreshAt)
             {
                 hudNextRefreshAt = Time.time + 0.25f;
                 RefreshHudTargetsSnapshot();
             }
 
-            if (_debugTab == 1)
+            if (_debugTab == TabPlayers)
             {
                 RebuildAvatarMapIfNeeded();
             }
@@ -222,7 +259,7 @@ namespace TFS_Mimics
                 RebuildActiveTabCache();
             }
 
-            if (_showGizmos)
+            if (inLevel && _showGizmos)
             {
                 RefreshEnemyOverlays();
             }
@@ -231,7 +268,7 @@ namespace TFS_Mimics
         // ─── OnGUI ───────────────────────────────────────────────────────────────
         private void OnGUI()
         {
-            if (photonView == null || !photonView.IsMine || !SemiFunc.RunIsLevel())
+            if (photonView == null || !photonView.IsMine || !IsDebugGuiAllowedHere())
             {
                 return;
             }
@@ -243,7 +280,7 @@ namespace TFS_Mimics
                 return;
             }
 
-            if (_showGizmos)
+            if (_showGizmos && SemiFunc.RunIsLevel())
             {
                 DrawWorldGizmos();
             }
@@ -261,7 +298,19 @@ namespace TFS_Mimics
                 return;
             }
 
+            ClampWindowToScreen();
+            if (_debugWindowCollapsed)
+            {
+                // Collapsed: title bar + status strip only.
+                _debugWindowRect.height = GetBodyTopOffset() - 2f;
+            }
             _debugWindowRect = GUI.Window(9900, _debugWindowRect, DrawMainWindow, string.Empty, _gsWindow);
+
+            if (_debugWindowCollapsed)
+            {
+                return;
+            }
+
             HandleResizeInput();
 
             // Resize handle indicator (drawn over the window frame)
@@ -297,8 +346,9 @@ namespace TFS_Mimics
                 if (ev.type == EventType.MouseDrag)
                 {
                     var delta = ev.mousePosition - _resizeMouseStart;
-                    _debugWindowRect.width = Mathf.Max(420f, _resizeRectStart.width + delta.x);
-                    _debugWindowRect.height = Mathf.Max(320f, _resizeRectStart.height + delta.y);
+                    _debugWindowRect.width = Mathf.Max(MinWindowWidth, _resizeRectStart.width + delta.x);
+                    _debugWindowRect.height = Mathf.Max(MinWindowHeight, _resizeRectStart.height + delta.y);
+                    _debugWindowExpandedHeight = _debugWindowRect.height;
                     ev.Use();
                 }
 
@@ -310,27 +360,221 @@ namespace TFS_Mimics
             }
         }
 
-        private void DrawMainWindow(int id)
+        private void ClampWindowToScreen()
         {
-            DrawWindowTitleBar("MIMICS  DEBUG", $"[{Plugin.configDebugMenuKey.Value}]");
-            GUILayout.Space(4f);
-            DrawPlaybackHeader();
-            GUILayout.Space(4f);
-            DrawTabRow();
-            GUILayout.Space(4f);
+            _debugWindowRect.width = Mathf.Min(_debugWindowRect.width, Mathf.Max(MinWindowWidth, Screen.width));
+            _debugWindowRect.x = Mathf.Clamp(_debugWindowRect.x, 0f, Mathf.Max(0f, Screen.width - _debugWindowRect.width));
+            _debugWindowRect.y = Mathf.Clamp(_debugWindowRect.y, 0f, Mathf.Max(0f, Screen.height - 40f));
+        }
 
-            var scrollH = Mathf.Max(100f, _debugWindowRect.height - 168f);
-            switch (_debugTab)
+        private void SetWindowCollapsed(bool collapsed)
+        {
+            if (collapsed == _debugWindowCollapsed)
             {
-                case 0: DrawNearestMobsTab(scrollH); break;
-                case 1: DrawPlayersTab(scrollH); break;
-                case 2: DrawCacheTab(scrollH); break;
-                case 3: DrawVoiceLogTab(scrollH); break;
-                case 4: DrawOverlaysTab(scrollH); break;
-                case 5: DrawSettingsTab(scrollH); break;
+                return;
             }
 
-            GUI.DragWindow(new Rect(0f, 0f, _debugWindowRect.width - 28f, 26f));
+            _debugWindowCollapsed = collapsed;
+            if (collapsed)
+            {
+                _debugWindowExpandedHeight = _debugWindowRect.height;
+                StopRecordingPreview();
+            }
+            else
+            {
+                _debugWindowRect.height = Mathf.Max(MinWindowHeight, _debugWindowExpandedHeight);
+            }
+        }
+
+        private void DrawMainWindow(int id)
+        {
+            DrawWindowTitleBar();
+            GUILayout.Space(4f);
+            DrawStatusStrip();
+
+            if (_debugWindowCollapsed)
+            {
+                GUI.DragWindow(new Rect(0f, 0f, _debugWindowRect.width - 60f, 28f));
+                return;
+            }
+
+            GUILayout.Space(6f);
+
+            var bodyH = Mathf.Max(160f, _debugWindowRect.height - GetBodyTopOffset() - 12f);
+            GUILayout.BeginHorizontal(GUILayout.Height(bodyH));
+
+            DrawSidebar(bodyH);
+
+            // Vertical divider
+            var divider = GUILayoutUtility.GetRect(1f, bodyH, GUILayout.Width(1f), GUILayout.ExpandHeight(true));
+            GUI.color = CLine;
+            GUI.DrawTexture(divider, _txWhite);
+            GUI.color = Color.white;
+            GUILayout.Space(8f);
+
+            GUILayout.BeginVertical();
+            var scrollH = Mathf.Max(100f, bodyH - 34f);
+            switch (_debugTab)
+            {
+                case TabRecordings: DrawRecordingsTab(scrollH); break;
+                case TabMobs: DrawNearestMobsTab(scrollH); break;
+                case TabPlayers: DrawPlayersTab(scrollH); break;
+                case TabNetwork: DrawNetworkTab(scrollH); break;
+                case TabOverlays: DrawOverlaysTab(scrollH); break;
+                case TabSettings: DrawSettingsTab(scrollH); break;
+                case TabDirector: DrawDirectorTab(scrollH); break;
+            }
+            GUILayout.EndVertical();
+
+            GUILayout.EndHorizontal();
+
+            GUI.DragWindow(new Rect(0f, 0f, _debugWindowRect.width - 60f, 28f));
+        }
+
+        // Height consumed by the title bar and status strip (status grows with concurrent playbacks).
+        private float GetBodyTopOffset()
+        {
+            var extraPlaybackRows = Mathf.Clamp(CountActivePlaybacks() - 1, 0, MaxExtraPlaybackRows + 1);
+            return 116f + extraPlaybackRows * 16f;
+        }
+
+        private void DrawSidebar(float height)
+        {
+            GUILayout.BeginVertical(GUILayout.Width(SidebarWidth), GUILayout.Height(height));
+            foreach (var i in TabOrder)
+            {
+                var active = _debugTab == i;
+                var rect = GUILayoutUtility.GetRect(new GUIContent(TabNames[i]), active ? _gsNavItemActive : _gsNavItem,
+                    GUILayout.Width(SidebarWidth), GUILayout.Height(26f));
+                if (GUI.Button(rect, TabNames[i] + GetTabBadge(i), active ? _gsNavItemActive : _gsNavItem))
+                {
+                    if (_debugTab != i)
+                    {
+                        _debugTab = i;
+                        _tabCacheNextRebuild = 0f;
+                    }
+                }
+
+                if (active)
+                {
+                    GUI.color = CAccent;
+                    GUI.DrawTexture(new Rect(rect.x, rect.y + 4f, 2f, rect.height - 8f), _txWhite);
+                    GUI.color = Color.white;
+                }
+
+                GUILayout.Space(2f);
+            }
+
+            GUILayout.FlexibleSpace();
+
+            GUI.enabled = SemiFunc.RunIsLevel();
+            if (GUILayout.Button("▶  Force play", _gsBtnYellow, GUILayout.Width(SidebarWidth), GUILayout.Height(26f)))
+            {
+                OpenForcePlayModal();
+            }
+            GUI.enabled = true;
+            GUILayout.EndVertical();
+        }
+
+        private string GetTabBadge(int tab)
+        {
+            switch (tab)
+            {
+                case TabRecordings: return cachedAudio.Count + _customAudioClips.Count > 0 ? $"  {cachedAudio.Count + _customAudioClips.Count}" : string.Empty;
+                case TabMobs: return nearestPlaybackCandidatesHud.Count > 0 && SemiFunc.RunIsLevel() ? $"  {nearestPlaybackCandidatesHud.Count}" : string.Empty;
+                case TabNetwork: return incomingAudioTransmissions.Count > 0 ? $"  ●{incomingAudioTransmissions.Count}" : string.Empty;
+                case TabDirector: return _directorPending.Count > 0 ? $"  ●{_directorPending.Count}" : string.Empty;
+                default: return string.Empty;
+            }
+        }
+
+        // ─── Window state persistence ─────────────────────────────────────────────
+        // BepInEx/config/TFS_Mimics.window.txt: x;y;w;h;tab;collapsed;expandedHeight
+        private bool _windowStateLoaded;
+        private string _windowStateSaved;
+        private float _windowStateNextSaveAt;
+
+        private static string GetWindowStatePath()
+        {
+            return Path.Combine(Paths.ConfigPath, "TFS_Mimics.window.txt");
+        }
+
+        private void EnsureWindowStateLoaded()
+        {
+            if (_windowStateLoaded)
+            {
+                return;
+            }
+
+            _windowStateLoaded = true;
+            try
+            {
+                var path = GetWindowStatePath();
+                if (!File.Exists(path))
+                {
+                    return;
+                }
+
+                var parts = File.ReadAllText(path).Trim().Split(';');
+                if (parts.Length < 7)
+                {
+                    return;
+                }
+
+                var inv = CultureInfo.InvariantCulture;
+                _debugWindowRect = new Rect(
+                    float.Parse(parts[0], inv), float.Parse(parts[1], inv),
+                    Mathf.Max(MinWindowWidth, float.Parse(parts[2], inv)),
+                    Mathf.Max(MinWindowHeight, float.Parse(parts[3], inv)));
+                _debugTab = Mathf.Clamp(int.Parse(parts[4], inv), 0, TabNames.Length - 1);
+                _debugWindowCollapsed = parts[5] == "1";
+                _debugWindowExpandedHeight = Mathf.Max(MinWindowHeight, float.Parse(parts[6], inv));
+                _windowStateSaved = SerializeWindowState();
+            }
+            catch (Exception ex)
+            {
+                Log.LogWarning($"Failed to load debug window state: {ex.Message}");
+            }
+        }
+
+        private string SerializeWindowState()
+        {
+            var inv = CultureInfo.InvariantCulture;
+            var height = _debugWindowCollapsed ? _debugWindowExpandedHeight : _debugWindowRect.height;
+            return string.Join(";",
+                Mathf.Round(_debugWindowRect.x).ToString(inv),
+                Mathf.Round(_debugWindowRect.y).ToString(inv),
+                Mathf.Round(_debugWindowRect.width).ToString(inv),
+                Mathf.Round(height).ToString(inv),
+                _debugTab.ToString(inv),
+                _debugWindowCollapsed ? "1" : "0",
+                Mathf.Round(_debugWindowExpandedHeight).ToString(inv));
+        }
+
+        private void SaveWindowStateIfChanged()
+        {
+            if (!_windowStateLoaded || _isResizing || Time.unscaledTime < _windowStateNextSaveAt)
+            {
+                return;
+            }
+
+            _windowStateNextSaveAt = Time.unscaledTime + 1f;
+            var state = SerializeWindowState();
+            if (state == _windowStateSaved)
+            {
+                return;
+            }
+
+            try
+            {
+                File.WriteAllText(GetWindowStatePath(), state);
+                _windowStateSaved = state;
+            }
+            catch (Exception ex)
+            {
+                Log.LogWarning($"Failed to save debug window state: {ex.Message}");
+                _windowStateNextSaveAt = Time.unscaledTime + 30f;
+            }
         }
 
         // ─── Style Init ───────────────────────────────────────────────────────────
@@ -352,12 +596,23 @@ namespace TFS_Mimics
             _txGreen = MakeTex(1, 1, CGreen);
             _txRed = MakeTex(1, 1, CRed);
             _txYellow = MakeTex(1, 1, CYellow);
+            var txClear = MakeTex(1, 1, new Color(0f, 0f, 0f, 0f));
+            var txRowAlt = MakeTex(1, 1, new Color(1f, 1f, 1f, 0.025f));
+            var txNavActive = MakeTex(1, 1, new Color(0.16f, 0.38f, 0.62f, 0.45f));
 
             _gsWindow = new GUIStyle(GUI.skin.window)
             {
-                padding = new RectOffset(10, 10, 10, 10),
+                padding = new RectOffset(10, 10, 8, 10),
                 normal = { background = _txBgDark, textColor = CText },
                 onNormal = { background = _txBgDark, textColor = CText }
+            };
+
+            _gsTitle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 13,
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = CAccent },
+                padding = new RectOffset(0, 0, 2, 2)
             };
 
             _gsH1 = new GUIStyle(GUI.skin.label)
@@ -395,6 +650,13 @@ namespace TFS_Mimics
                 active = { background = _txAccent, textColor = Color.white }
             };
 
+            _gsIconBtn = new GUIStyle(_gsBtn)
+            {
+                padding = new RectOffset(0, 0, 0, 0),
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 11
+            };
+
             _gsBtnPrimary = new GUIStyle(_gsBtn)
             {
                 normal = { background = _txAccentDim, textColor = Color.white },
@@ -423,6 +685,32 @@ namespace TFS_Mimics
             {
                 fontStyle = FontStyle.Bold,
                 normal = { background = _txAccentDim, textColor = Color.white }
+            };
+
+            _gsNavItem = new GUIStyle(GUI.skin.button)
+            {
+                fontSize = 11,
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset(10, 6, 4, 4),
+                normal = { background = txClear, textColor = CTextDim },
+                hover = { background = _txBgHover, textColor = CText },
+                active = { background = _txAccentDim, textColor = Color.white }
+            };
+
+            _gsNavItemActive = new GUIStyle(_gsNavItem)
+            {
+                fontStyle = FontStyle.Bold,
+                normal = { background = txNavActive, textColor = Color.white },
+                hover = { background = txNavActive, textColor = Color.white }
+            };
+
+            _gsChip = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 10,
+                alignment = TextAnchor.MiddleCenter,
+                padding = new RectOffset(6, 6, 2, 2),
+                margin = new RectOffset(2, 2, 3, 3),
+                normal = { background = _txBgPanel, textColor = CTextDim }
             };
 
             var listBg = MakeTex(1, 1, new Color(0f, 0f, 0f, 0f));
@@ -454,6 +742,17 @@ namespace TFS_Mimics
             {
                 padding = new RectOffset(6, 6, 5, 5),
                 normal = { background = _txBgPanel, textColor = CText }
+            };
+
+            _gsRow = new GUIStyle(GUIStyle.none)
+            {
+                padding = new RectOffset(4, 4, 3, 3),
+                normal = { background = txClear }
+            };
+
+            _gsRowAlt = new GUIStyle(_gsRow)
+            {
+                normal = { background = txRowAlt }
             };
         }
 

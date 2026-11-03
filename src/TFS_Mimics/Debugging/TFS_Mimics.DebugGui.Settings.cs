@@ -17,6 +17,7 @@ namespace TFS_Mimics
             if (_settingMaxFilesBuf == null) _settingMaxFilesBuf = (Plugin.configPersistMaxFilesPerPlayer?.Value ?? 100).ToString();
             if (_settingSamplingRateBuf == null) _settingSamplingRateBuf = (Plugin.configSamplingRate?.Value ?? 48000).ToString();
             if (_settingNormalizeBuf == null) _settingNormalizeBuf = (Plugin.configNormalizeTarget?.Value ?? 85).ToString();
+            if (_settingVadSensitivityBuf == null) _settingVadSensitivityBuf = (Plugin.configVadSensitivity?.Value ?? 85).ToString();
 
             _scrollSettings = GUILayout.BeginScrollView(_scrollSettings, GUILayout.Height(scrollH));
 
@@ -40,6 +41,22 @@ namespace TFS_Mimics
 
             DrawSettingSliderInt("Normalize Target", ref _settingNormalizeBuf,
                 Plugin.configNormalizeTarget, 0, 100, "% (0=off)");
+
+            DrawSettingSliderInt("Voice Detection Sensitivity", ref _settingVadSensitivityBuf,
+                Plugin.configVadSensitivity, 0, 100, "");
+
+            GUILayout.Space(4f);
+
+            // ── Director (host) ────────────────────────────────────────────────
+            DrawSettingsSection("Director (host only)");
+
+            DrawSettingToggle("Smart Director", Plugin.configSmartDirector);
+            DrawSettingToggle("Event: Player Death", Plugin.configEventDeath);
+            DrawSettingToggle("Event: Player Hurt", Plugin.configEventHurt);
+            DrawSettingToggle("Event: Enemy Spotted Player", Plugin.configEventSpotted);
+            DrawSettingToggle("Event: Valuable Broken", Plugin.configEventBreak);
+            DrawSettingToggle("Event: Head Grabber Talks", Plugin.configEventHeadTalk);
+            DrawSettingToggle("Event: Valuable Picked Up", Plugin.configEventPickup);
 
             GUILayout.Space(4f);
 
@@ -120,16 +137,44 @@ namespace TFS_Mimics
             GUI.color = Color.white;
             GUILayout.FlexibleSpace();
 
-            var current = entry.Value;
-            if (GUILayout.Button(current, _gsBtn, GUILayout.MinHeight(18f), GUILayout.Width(80f)))
+            var listening = _keybindListeningEntry == entry;
+            if (listening)
             {
-                var idx = Array.IndexOf(Plugin.AvailableKeybinds, current);
-                if (idx < 0) idx = 0;
-                idx = (idx + 1) % Plugin.AvailableKeybinds.Length;
-                entry.Value = Plugin.AvailableKeybinds[idx];
+                var e = Event.current;
+                if (e.type == EventType.KeyDown && e.keyCode != KeyCode.None && !IsModifierKey(e.keyCode))
+                {
+                    if (e.keyCode != KeyCode.Escape)
+                        entry.Value = e.keyCode.ToString();
+                    _keybindListeningEntry = null;
+                    listening = false;
+                    e.Use();
+                }
             }
+
+            GUI.color = listening ? CYellow : Color.white;
+            if (GUILayout.Button(listening ? "Press a key..." : entry.Value, _gsBtn, GUILayout.MinHeight(18f), GUILayout.Width(110f)))
+            {
+                _keybindListeningEntry = listening ? null : entry;
+            }
+            GUI.color = Color.white;
             GUILayout.EndHorizontal();
+
+            if (listening)
+            {
+                GUI.color = CTextDim;
+                GUILayout.Label("Press any key to bind, Esc to cancel.", _gsSmall);
+                GUI.color = Color.white;
+            }
             GUILayout.Space(2f);
+        }
+
+        // Shift is reserved for the Shift+Key focus toggle, so bare modifiers can't be bound.
+        private static bool IsModifierKey(KeyCode key)
+        {
+            return key == KeyCode.LeftShift || key == KeyCode.RightShift
+                || key == KeyCode.LeftControl || key == KeyCode.RightControl
+                || key == KeyCode.LeftAlt || key == KeyCode.RightAlt
+                || key == KeyCode.LeftCommand || key == KeyCode.RightCommand;
         }
 
         private void DrawSettingSliderInt(string label, ref string textBuf, ConfigEntry<int> entry, int min, int max, string unit)

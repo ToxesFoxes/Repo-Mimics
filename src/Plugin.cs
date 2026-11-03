@@ -9,7 +9,7 @@ using RepoSteamNetworking.API;
 
 namespace TFS_Mimics
 {
-    [BepInPlugin("TFS_Mimics", "TFS_Mimics", "1.1.3")]
+    [BepInPlugin("TFS_Mimics", "TFS_Mimics", "1.2.0")]
     [BepInDependency("com.rune580.reposteamnetworking")]
     public class Plugin : BaseUnityPlugin
     {
@@ -25,19 +25,20 @@ namespace TFS_Mimics
         public static ConfigEntry<bool> configHearYourself;
         public static ConfigEntry<bool> configFilterEnabled;
         public static ConfigEntry<bool> configPlaybackVoiceFilterEnabled;
+        public static ConfigEntry<bool> configSmartDirector;
+        public static ConfigEntry<bool> configEventDeath;
+        public static ConfigEntry<bool> configEventHurt;
+        public static ConfigEntry<bool> configEventSpotted;
+        public static ConfigEntry<bool> configEventBreak;
+        public static ConfigEntry<bool> configEventHeadTalk;
+        public static ConfigEntry<bool> configEventPickup;
         public static ConfigEntry<int> configSamplingRate;
         public static ConfigEntry<bool> configPersistAudioCache;
         public static ConfigEntry<int> configPersistMaxFilesPerPlayer;
         public static ConfigEntry<int> configNormalizeTarget;
-        internal static readonly string[] AvailableKeybinds = [
-            "A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
-            "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
-            "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3",
-            "4", "5", "6", "7", "8", "9", "F1", "F2", "F3", "F4",
-            "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "Space", "Return",
-            "Tab", "LeftShift", "RightShift", "LeftControl", "RightControl",
-            "Alpha0", "Alpha1", "Alpha2", "Alpha3", "Alpha4", "Alpha5", "Alpha6", "Alpha7", "Alpha8", "Alpha9"
-        ];
+        public static ConfigEntry<int> configVadSensitivity;
+        public static ConfigEntry<bool> configShowSetupWizard;
+        public static ConfigEntry<int> configMaxClipsInMemory;
         public static readonly Dictionary<string, ConfigEntry<bool>> enemyConfigEntries = new Dictionary<string, ConfigEntry<bool>>();
 
         public static UnityEngine.KeyCode GetDebugMenuKey()
@@ -65,8 +66,11 @@ namespace TFS_Mimics
             configVoiceVolume = /*                 */ Config.Bind("General", "Volume", /*                          */ 30, /*    */ new ConfigDescription("Volume of mimic voices (percent).", new AcceptableValueRange<int>(0, 100), Array.Empty<object>()));
             configHearYourself = /*                */ Config.Bind("General", "Hear Yourself?", /*                  */ true, /*  */ "If false, only other clients hear mimic playback.");
             configPersistAudioCache = /*           */ Config.Bind("General", "Persist Audio Cache", /*             */ false, /* */ "If true, received mimic audio clips are saved to disk and loaded on world entry.");
+            configMaxClipsInMemory = /*            */ Config.Bind("General", "Max Clips In Memory Per Player", /*  */ 40, /*    */ new ConfigDescription("How many recordings per player are kept loaded during a session (oldest unpinned are dropped from memory, not from disk). Keeps long sessions light.", new AcceptableValueRange<int>(5, 500), Array.Empty<object>()));
             configPersistMaxFilesPerPlayer = /*    */ Config.Bind("General", "Persist Max Files Per Player", /*    */ 100, /*   */ new ConfigDescription("Maximum number of persisted recordings to keep per player folder.", new AcceptableValueRange<int>(1, 5000), Array.Empty<object>()));
             configNormalizeTarget = /*             */ Config.Bind("General", "Normalize Target", /*                */ 85, /*    */ new ConfigDescription("Peak normalization target for voice and custom audio (0 = off, 100 = 0 dBFS).", new AcceptableValueRange<int>(0, 100), Array.Empty<object>()));
+            configVadSensitivity = /*              */ Config.Bind("General", "Voice Detection Sensitivity", /*     */ 85, /*    */ new ConfigDescription("How easily your voice starts a recording (higher = quieter speech is captured, but more background noise too).", new AcceptableValueRange<int>(0, 100), Array.Empty<object>()));
+            configShowSetupWizard = /*             */ Config.Bind("General", "Show Setup Wizard", /*               */ false, /* */ "Open the microphone setup wizard on the main menu. Turns itself off once the setup is saved or skipped.");
             #endregion
 
             #region Host Only
@@ -74,13 +78,23 @@ namespace TFS_Mimics
             configMinDelay = /*                    */ Config.Bind("Host Only", "MinDelay", /*                        */ 10, /*    */ new ConfigDescription("Minimum delay before record/play.", new AcceptableValueRange<int>(1, 300), Array.Empty<object>()));
             configMaxDelay = /*                    */ Config.Bind("Host Only", "MaxDelay", /*                        */ 20, /*    */ new ConfigDescription("Maximum delay before record/play.", new AcceptableValueRange<int>(5, 600), Array.Empty<object>()));
             configPlaybackVoiceFilterEnabled = /*  */ Config.Bind("Host Only", "Playback Voice Filters Enabled", /*  */ true, /*  */ "If false, playback never applies pitch/alien voice filters.");
+            configSmartDirector = /*               */ Config.Bind("Host Only", "Smart Director", /*                  */ true, /*  */ "Pick voices, enemies and listeners by context (who can see whom, who is far or dead, what was played recently) instead of at random.");
+            configEventDeath = /*                  */ Config.Bind("Host Only", "Event: Player Death", /*             */ true, /*  */ "Some time after a player dies, an enemy near the body calls out with their voice.");
+            configEventHurt = /*                   */ Config.Bind("Host Only", "Event: Player Hurt", /*              */ true, /*  */ "Shortly after a player gets hurt, nearby teammates hear their voice from an enemy.");
+            configEventSpotted = /*                */ Config.Bind("Host Only", "Event: Enemy Spotted Player", /*     */ true, /*  */ "An enemy that spotted a player tries to lure them with another teammate's voice.");
+            configEventBreak = /*                  */ Config.Bind("Host Only", "Event: Valuable Broken", /*          */ true, /*  */ "After a valuable is damaged, an enemy nearby reacts with the voice of whoever held it.");
+            configEventHeadTalk = /*               */ Config.Bind("Host Only", "Event: Head Grabber Talks", /*       */ true, /*  */ "While a Head Grabber carries a dead player's head, the head calls out with its owner's voice (and screams when the grabber attacks).");
+            configEventPickup = /*                 */ Config.Bind("Host Only", "Event: Valuable Picked Up", /*       */ true, /*  */ "Sometimes, after a player grabs a valuable worth $200+, a hidden enemy nearby talks to them with a teammate's voice.");
             #endregion
 
             configDebugVerbose = /*                */ Config.Bind("Debug", "Verbose Logging", /*                 */ false, /* */ "Enable very detailed debug logs for the whole mimic pipeline.");
-            configDebugMenuKey = /*                */ Config.Bind("Debug", "Menu Keybind", /*                    */ "F8", /*  */ new ConfigDescription("Keybind to open the Mimics debug menu in-game.", new AcceptableValueList<string>(AvailableKeybinds), Array.Empty<object>()));
+            configDebugMenuKey = /*                */ Config.Bind("Debug", "Menu Keybind", /*                    */ "F8", /*  */ new ConfigDescription("Keybind to open the Mimics debug menu in-game (UnityEngine.KeyCode name, e.g. F8, Insert, Keypad5). Can be rebound by key press in the debug menu Settings tab.", null, Array.Empty<object>()));
             configSamplingRate = /*                */ Config.Bind("Experimental", "Sampling Rate", /*            */ 48000, /* */ new ConfigDescription("Microphone/sample rate.", new AcceptableValueRange<int>(16000, 48000), Array.Empty<object>()));
 
             configFilterEnabled = /*               */ Config.Bind("Filter", "Filter Enabled?", false, "Enable per-enemy mimic filter.");
+
+            harmony = new Harmony("TFS_Mimics");
+            patches.SteamNetworkingCompat.Apply(harmony);
 
             RepoSteamNetwork.RegisterPacket<MimicsAudioPacket>();
             RepoSteamNetwork.AddCallback<MimicsAudioPacket>(TFS_Mimics.OnMimicsAudioPacketReceived);
@@ -88,18 +102,22 @@ namespace TFS_Mimics
             RepoSteamNetwork.RegisterPacket<SoundReadyPacket>();
             RepoSteamNetwork.AddCallback<SoundReadyPacket>(TFS_Mimics.OnSoundReadyPacketReceived);
 
+            RepoSteamNetwork.RegisterPacket<SoundForgetPacket>();
+            RepoSteamNetwork.AddCallback<SoundForgetPacket>(TFS_Mimics.OnSoundForgetPacketReceived);
+
             RepoSteamNetwork.RegisterPacket<CustomSoundManifestPacket>();
             RepoSteamNetwork.AddCallback<CustomSoundManifestPacket>(TFS_Mimics.OnCustomSoundManifestReceived);
 
             RepoSteamNetwork.RegisterPacket<SyncPlayCommandPacket>();
             RepoSteamNetwork.AddCallback<SyncPlayCommandPacket>(TFS_Mimics.OnSyncPlayCommandReceived);
 
-            harmony = new Harmony("TFS_Mimics");
             harmony.PatchAll();
 
             patches.EnemyDirectorStartPatch.Initialize(Config);
 
             EnsureDataFolders();
+
+            MimicsSetupWizard.Create();
         }
 
         private void EnsureDataFolders()

@@ -33,6 +33,13 @@ namespace TFS_Mimics
 
                 if (!SemiFunc.RunIsLevel()) continue;
 
+                // An event-driven playback just happened — let the moment breathe.
+                if (Time.time < _directorTimerSuppressedUntil)
+                {
+                    DirectorFeed("timer", "skipped: recent event playback", CTextDim);
+                    continue;
+                }
+
                 HostAuthorityTick();
             }
 
@@ -60,6 +67,15 @@ namespace TFS_Mimics
                         ? UnityEngine.Random.Range(0, AudioFilters.Count)
                         : -1;
                 }
+            }
+            else if (Plugin.configSmartDirector == null || Plugin.configSmartDirector.Value)
+            {
+                var pick = DirectorPick(DirectorRequest.Timer());
+                if (pick == null) return;
+                soundGuid = pick.SoundGuid;
+                selectedViewIds = pick.EnemyViewIds;
+                playerCoverageCount = pick.ListenerCount;
+                voiceFilterMode = RollVoiceFilterMode();
             }
             else
             {
@@ -193,6 +209,32 @@ namespace TFS_Mimics
             // Send to all non-host clients, then execute locally on host
             RepoSteamNetwork.SendPacket(cmd, NetworkDestination.ClientsOnly);
             HandleSyncPlayCommand(cmd);
+            DirectorNotePlayed(soundGuid);
+        }
+
+        private static int RollVoiceFilterMode()
+        {
+            var filterEnabled = Plugin.configPlaybackVoiceFilterEnabled == null || Plugin.configPlaybackVoiceFilterEnabled.Value;
+            return (filterEnabled && UnityEngine.Random.value > 0.9f)
+                ? UnityEngine.Random.Range(0, AudioFilters.Count)
+                : -1;
+        }
+
+        // Event-driven playback: same broadcast as a timer tick, with an already chosen sound and enemies.
+        private void SendDirectorPlayback(DirectorPickResult pick)
+        {
+            var cmd = new SyncPlayCommandPacket
+            {
+                SoundGuid = pick.SoundGuid,
+                EnemyViewIds = pick.EnemyViewIds,
+                HostActorNumber = PhotonNetwork.LocalPlayer?.ActorNumber ?? -1,
+                VoiceFilterMode = RollVoiceFilterMode()
+            };
+
+            DLog($"DirectorEvent: guid={pick.SoundGuid} enemies=[{string.Join(",", pick.EnemyViewIds)}] listeners={pick.ListenerCount}");
+            RepoSteamNetwork.SendPacket(cmd, NetworkDestination.ClientsOnly);
+            HandleSyncPlayCommand(cmd);
+            DirectorNotePlayed(pick.SoundGuid);
         }
 
         // ─── IInRoomCallbacks ─────────────────────────────────────────────────────
@@ -218,5 +260,36 @@ namespace TFS_Mimics
         }
         public void OnRoomPropertiesUpdate(PhotonHashtable propertiesThatChanged) { }
         public void OnPlayerPropertiesUpdate(Player targetPlayer, PhotonHashtable changedProps) { }
+
+        // ─── Hear Yourself preference (player property, read by the host director) ──
+        private const string HearSelfPropertyKey = "tfsm.hs";
+        private static bool _hearSelfHooked;
+
+        private void PublishHearSelfPreference()
+        {
+            if (!_hearSelfHooked && Plugin.configHearYourself != null)
+            {
+                _hearSelfHooked = true;
+                Plugin.configHearYourself.SettingChanged += (_, __) => Instance?.PublishHearSelfPreference();
+            }
+
+            var local = PhotonNetwork.LocalPlayer;
+            if (local == null || !PhotonNetwork.InRoom || Plugin.configHearYourself == null) return;
+
+            var value = Plugin.configHearYourself.Value;
+            if (local.CustomProperties.TryGetValue(HearSelfPropertyKey, out var current) && current is bool b && b == value) return;
+
+            local.SetCustomProperties(new PhotonHashtable { { HearSelfPropertyKey, value } });
+            DLog($"Published hearSelf={value}");
+        }
+
+        // Players without the mod (or before publishing) are assumed to hear themselves — the default.
+        private static bool PlayerHearsSelf(Player player)
+        {
+            return player == null
+                || !player.CustomProperties.TryGetValue(HearSelfPropertyKey, out var v)
+                || !(v is bool b)
+                || b;
+        }
     }
 }

@@ -9,7 +9,7 @@ using RepoSteamNetworking.API;
 
 namespace TFS_Mimics
 {
-    [BepInPlugin("TFS_Mimics", "TFS_Mimics", "1.1.3")]
+    [BepInPlugin("TFS_Mimics", "TFS_Mimics", "1.2.0")]
     [BepInDependency("com.rune580.reposteamnetworking")]
     public class Plugin : BaseUnityPlugin
     {

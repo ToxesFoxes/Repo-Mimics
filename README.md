@@ -1,7 +1,7 @@
 # Mimics Mod for R.E.P.O
 
-[![Thunderstore](https://img.shields.io/thunderstore/v/ToxesFoxes/Mimics?logo=thunderstore&logoColor=white&label=Thunderstore)](https://thunderstore.io/c/repo/p/ToxesFoxes/Mimics/)
-[![Thunderstore Downloads](https://img.shields.io/thunderstore/dt/ToxesFoxes/Mimics?logo=thunderstore&logoColor=white&label=Downloads)](https://thunderstore.io/c/repo/p/ToxesFoxes/Mimics/)
+[![Thunderstore](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fthunderstore.io%2Fapi%2Fv1%2Fpackage-metrics%2FToxesFoxes%2FMimics%2F&query=%24.latest_version&label=Thunderstore&prefix=v&logo=thunderstore&logoColor=white&color=blue)](https://thunderstore.io/c/repo/p/ToxesFoxes/Mimics/)
+[![Thunderstore Downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fthunderstore.io%2Fapi%2Fv1%2Fpackage-metrics%2FToxesFoxes%2FMimics%2F&query=%24.downloads&label=Downloads&logo=thunderstore&logoColor=white&color=blue)](https://thunderstore.io/c/repo/p/ToxesFoxes/Mimics/)
 [![GitHub Release](https://img.shields.io/github/v/release/ToxesFoxes/Repo-Mimics?label=GitHub%20Release&color=green)](https://github.com/ToxesFoxes/Repo-Mimics/releases)
 
 Mimics adds a voice-mimic mechanic to monsters in R.E.P.O.

@@ -1,17 +1,25 @@
 # Mimics build instructions
 
-## 1) Set game path
-Open TFS_Mimics.local.props and set both GameDir and BepInExDir.
+## 1) Set game path (recommended)
+Create `TFS_Mimics.local.props` next to the project (it's gitignored) and set `GameDir`, so the mod compiles against your installed game:
 
-Expected folders:
-- GameDir\\REPO_Data\\Managed
-- BepInExDir\\core
+```xml
+<Project>
+  <PropertyGroup>
+    <GameDir>F:\Games\steamapps\common\REPO</GameDir>
+  </PropertyGroup>
+</Project>
+```
+
+Expected folder: `GameDir\REPO_Data\Managed`.
+
+Without this file the build falls back to the `R.E.P.O.GameLibs.Steam` NuGet package, which can lag behind the current game version.
 
 ## 2) Build
-Run one of these commands in this folder:
+Run this command in this folder:
 
 ```powershell
-dotnet build .Mimics.csproj -c Release
+dotnet build TFS_Mimics.csproj -c Release
 ```
 
 ## 3) Output

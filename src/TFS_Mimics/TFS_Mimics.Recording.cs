@@ -183,7 +183,14 @@ namespace TFS_Mimics
 
         public void ProcessVoiceData(short[] voiceData)
         {
-            if (!isRecording || !photonView.IsMine)
+            if (!photonView.IsMine)
+            {
+                return;
+            }
+
+            UpdateMicMeter(voiceData);
+
+            if (!isRecording)
             {
                 return;
             }
@@ -317,6 +324,25 @@ namespace TFS_Mimics
             var sensitivity = Mathf.Clamp01((Plugin.configVadSensitivity?.Value ?? 85) / 100f);
             var floor = Mathf.Lerp(VadThresholdAtMinSensitivity, VadThresholdAtMaxSensitivity, sensitivity);
             return Mathf.Max(floor, vadNoiseFloor * VadNoiseFloorMultiplier);
+        }
+
+        // ─── Mic meter (debug menu) ───────────────────────────────────────────────
+        private float _micLevel;        // last frame RMS
+        private float _micPeakHold;     // decaying peak for the meter
+        private float _micLevelAt;      // Time.time of the last frame
+
+        private void UpdateMicMeter(short[] voiceData)
+        {
+            var rms = ComputeRmsEnergy(voiceData);
+            _micLevel = rms;
+            _micPeakHold = Mathf.Max(rms, _micPeakHold * 0.92f);
+            _micLevelAt = Time.time;
+
+            // Keep the noise floor fresh between recording cycles too, so the meter's markers stay meaningful.
+            if (!isRecording && rms <= GetVadThreshold())
+            {
+                UpdateNoiseFloor(rms);
+            }
         }
 
         internal string GetVadDebugString()

@@ -23,6 +23,19 @@ namespace TFS_Mimics
             public string SourceName;
             public float ReceivedAt;
             public string SoundGuid;
+            // Debug-menu bookkeeping
+            public string FilePath;     // persisted .bin, null when persistence is off
+            public bool Pinned;         // protected from the per-player file limit
+            public int PlayCount;
+            public float[] Waveform;    // lazily built peak envelope for the recordings list
+        }
+
+        private sealed class ActivePlayback
+        {
+            public string EnemyName;
+            public string Source;
+            public float StartedAt;
+            public float Length;
         }
 
         private sealed class HudPlaybackCandidate
@@ -100,6 +113,7 @@ namespace TFS_Mimics
         private readonly Dictionary<int, float> playbackBusyUntilByTargetKey = new Dictionary<int, float>();
         private readonly Dictionary<int, float> playbackStartedAtByTargetKey = new Dictionary<int, float>();
         private readonly Dictionary<int, float> playbackClipLengthByTargetKey = new Dictionary<int, float>();
+        private readonly Dictionary<int, ActivePlayback> activePlaybacks = new Dictionary<int, ActivePlayback>();
         // Static: survives component destruction between levels (PlayerAvatar is recreated per-level)
         private static readonly List<CachedAudioEntry> cachedAudio = new List<CachedAudioEntry>();
 
@@ -189,8 +203,9 @@ namespace TFS_Mimics
                 SetCursorForGui(false);
             }
 
-            if (!inLevel)
+            if (!IsDebugGuiAllowedHere())
             {
+                SetCursorForGui(false);
                 return;
             }
 

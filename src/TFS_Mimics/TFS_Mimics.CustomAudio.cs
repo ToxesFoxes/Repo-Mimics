@@ -28,6 +28,8 @@ namespace TFS_Mimics
             public string SoundGuid;  // "fs:<md5>" or "api:<modGuid>:<md5>"
             /// <summary>MD5 hex of raw file bytes (folder) or PCM floats (API). Used for cross-reference on host.</summary>
             public string ContentHash;
+            public int PlayCount;
+            public float[] Waveform;
         }
 
         // ─── State ───────────────────────────────────────────────────────────────
@@ -254,12 +256,8 @@ namespace TFS_Mimics
 
             var playbackEndsAt = Time.time + entry.Clip.length + 0.1f;
             var targetKey = GetPlaybackTargetKey(selected.Enemy, selected.Target);
-            if (targetKey != 0)
-            {
-                playbackBusyUntilByTargetKey[targetKey] = playbackEndsAt;
-                playbackStartedAtByTargetKey[targetKey] = Time.time;
-                playbackClipLengthByTargetKey[targetKey] = entry.Clip.length;
-            }
+            TrackPlaybackStart(targetKey, entry.Clip.length, selected.EnemyName, entry.FileName);
+            entry.PlayCount++;
 
             currentPlaybackEnemyName = selected.EnemyName;
             currentPlaybackSourcePlayerId = "custom";

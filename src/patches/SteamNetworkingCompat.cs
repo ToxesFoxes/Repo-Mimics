@@ -22,6 +22,28 @@ namespace TFS_Mimics.patches
 
         internal static bool Active { get; private set; }
 
+        private static readonly MethodInfo ClientActiveGetter = AccessTools.PropertyGetter(typeof(RepoNetworkingClient), "ClientActive");
+        private static readonly MethodInfo ServerActiveGetter = AccessTools.PropertyGetter(typeof(RepoNetworkingServer), "ServerActive");
+
+        // Debug-menu status: is the library's socket client (and on host, server) running.
+        internal static bool IsClientConnected() => ReadFlag(ClientActiveGetter, RepoNetworkingClient.Instance);
+        internal static bool IsServerActive() => ReadFlag(ServerActiveGetter, RepoNetworkingServer.Instance);
+
+        private static bool ReadFlag(MethodInfo getter, object instance)
+        {
+            if (getter == null || instance == null)
+                return false;
+
+            try
+            {
+                return (bool)getter.Invoke(instance, null);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         internal static void Apply(Harmony harmony)
         {
             try

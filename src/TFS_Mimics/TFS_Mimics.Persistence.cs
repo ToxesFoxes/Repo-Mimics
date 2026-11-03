@@ -100,6 +100,7 @@ namespace TFS_Mimics
                     writer.Write(entry.AudioData);
                 }
 
+                entry.FilePath = path;
                 RegisterPlayerInIndex(playerId, entry.SourceName);
                 SavePlayersIndexToDisk();
                 EnforcePlayerAudioFileLimit(playerDir);
@@ -167,7 +168,9 @@ namespace TFS_Mimics
                         SourceActor = actorId,
                         SourcePlayerId = playerId,
                         SourceName = sourceName,
-                        ReceivedAt = Time.time
+                        ReceivedAt = Time.time,
+                        FilePath = path,
+                        Pinned = IsPinnedFile(path)
                     };
 
                     return true;
@@ -393,7 +396,9 @@ namespace TFS_Mimics
 
             try
             {
+                // Pinned recordings never count toward or get evicted by the limit.
                 var files = Directory.GetFiles(playerDir, "audio_*_*.bin", SearchOption.TopDirectoryOnly)
+                    .Where(path => !IsPinnedFile(path))
                     .OrderBy(path => File.GetCreationTimeUtc(path))
                     .ToList();
 
@@ -408,12 +413,119 @@ namespace TFS_Mimics
                     var file = files[i];
                     File.Delete(file);
                     loadedPersistedFiles.Remove(file);
+                    foreach (var e in cachedAudio)
+                    {
+                        if (e != null && string.Equals(e.FilePath, file, StringComparison.OrdinalIgnoreCase))
+                            e.FilePath = null;
+                    }
                 }
             }
             catch (Exception ex)
             {
                 Log.LogWarning($"Failed to enforce per-player audio file limit: {ex.Message} dir={playerDir} {DebugContext()}");
             }
+        }
+
+        // ─── Pins & deletion (debug menu recordings manager) ──────────────────────
+        // Pinned file names live in audio-cache/pinned.txt, one per line.
+        private static HashSet<string> _pinnedFileNames;
+
+        private string GetPinnedListPath()
+        {
+            return Path.Combine(GetAudioCacheDirectoryPath(), "pinned.txt");
+        }
+
+        private HashSet<string> GetPinnedFileNames()
+        {
+            if (_pinnedFileNames != null)
+            {
+                return _pinnedFileNames;
+            }
+
+            _pinnedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var path = GetPinnedListPath();
+                if (File.Exists(path))
+                {
+                    foreach (var line in File.ReadAllLines(path))
+                    {
+                        if (!string.IsNullOrWhiteSpace(line))
+                            _pinnedFileNames.Add(line.Trim());
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.LogWarning($"Failed to read pinned list: {ex.Message} {DebugContext()}");
+            }
+
+            return _pinnedFileNames;
+        }
+
+        private bool IsPinnedFile(string path)
+        {
+            return !string.IsNullOrWhiteSpace(path) && GetPinnedFileNames().Contains(Path.GetFileName(path));
+        }
+
+        private void SetEntryPinned(CachedAudioEntry entry, bool pinned)
+        {
+            if (entry == null)
+            {
+                return;
+            }
+
+            entry.Pinned = pinned;
+            if (string.IsNullOrWhiteSpace(entry.FilePath))
+            {
+                return; // persistence off: pin lives only for this session
+            }
+
+            var names = GetPinnedFileNames();
+            var fileName = Path.GetFileName(entry.FilePath);
+            if (pinned) names.Add(fileName);
+            else names.Remove(fileName);
+
+            try
+            {
+                Directory.CreateDirectory(GetAudioCacheDirectoryPath());
+                File.WriteAllLines(GetPinnedListPath(), names.OrderBy(n => n, StringComparer.OrdinalIgnoreCase));
+            }
+            catch (Exception ex)
+            {
+                Log.LogWarning($"Failed to save pinned list: {ex.Message} {DebugContext()}");
+            }
+        }
+
+        private void DeleteCachedEntry(CachedAudioEntry entry)
+        {
+            if (entry == null)
+            {
+                return;
+            }
+
+            if (entry.Pinned)
+            {
+                SetEntryPinned(entry, false);
+            }
+
+            cachedAudio.Remove(entry);
+
+            if (!string.IsNullOrWhiteSpace(entry.FilePath))
+            {
+                try
+                {
+                    if (File.Exists(entry.FilePath))
+                        File.Delete(entry.FilePath);
+                    loadedPersistedFiles.Remove(entry.FilePath);
+                }
+                catch (Exception ex)
+                {
+                    Log.LogWarning($"Failed to delete recording file={Path.GetFileName(entry.FilePath)}: {ex.Message} {DebugContext()}");
+                }
+            }
+
+            DLog($"Recording deleted: player={entry.SourcePlayerId} guid={entry.SoundGuid} file={entry.FilePath ?? "<memory>"} {DebugContext()}");
         }
 
         private static string GetPlayerPersistentId(Player player)

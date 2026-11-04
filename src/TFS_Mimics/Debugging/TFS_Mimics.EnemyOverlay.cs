@@ -15,6 +15,9 @@ namespace TFS_Mimics
         public static bool ShowDistance = true;
         public static bool ShowPlaying = true;
         public static bool ShowAudioMarker = true;
+        public static bool ShowPaths = true;
+        public static bool ShowTalk = true;
+        public static bool ShowHits = true;
     }
 
     /// <summary>

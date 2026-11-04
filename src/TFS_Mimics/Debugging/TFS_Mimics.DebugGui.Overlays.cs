@@ -50,6 +50,19 @@ namespace TFS_Mimics
             GUI.color = CTextDim;
             GUILayout.Label("  \u266b billboard at the exact AudioSource position on each mob.", _gsSmall);
             GUI.color = Color.white;
+            GUILayout.Space(6f);
+
+            // ── Director gizmos ────────────────────────────────────────────────
+            DrawSettingsSection("Director Gizmos");
+
+            DrawOverlayToggle("Enemy Pathfinding", ref OverlaySettings.ShowPaths);
+            DrawOverlayToggle("Talk-To-Enemy Curve", ref OverlaySettings.ShowTalk);
+            DrawOverlayToggle("Enemy Hits", ref OverlaySettings.ShowHits);
+            GUI.color = CTextDim;
+            GUILayout.Label("  Cyan: navmesh path to the enemy's destination (host only: clients don't run enemy AI).", _gsSmall);
+            GUILayout.Label("  Curve: a player talking to an enemy (yellow), green once an answer is queued.", _gsSmall);
+            GUILayout.Label("  Red: an enemy hitting another enemy or a valuable (host only).", _gsSmall);
+            GUI.color = Color.white;
 
             GUILayout.Space(8f);
             GUILayout.EndScrollView();

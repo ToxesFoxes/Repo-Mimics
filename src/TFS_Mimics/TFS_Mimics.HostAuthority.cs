@@ -210,6 +210,7 @@ namespace TFS_Mimics
             RepoSteamNetwork.SendPacket(cmd, NetworkDestination.ClientsOnly);
             HandleSyncPlayCommand(cmd);
             DirectorNotePlayed(soundGuid);
+            if (string.IsNullOrEmpty(forceSoundGuid)) DirectorAfterPlayback(soundGuid, selectedViewIds);
         }
 
         private static int RollVoiceFilterMode()
@@ -235,6 +236,7 @@ namespace TFS_Mimics
             RepoSteamNetwork.SendPacket(cmd, NetworkDestination.ClientsOnly);
             HandleSyncPlayCommand(cmd);
             DirectorNotePlayed(pick.SoundGuid);
+            DirectorAfterPlayback(pick.SoundGuid, pick.EnemyViewIds);
         }
 
         // ─── IInRoomCallbacks ─────────────────────────────────────────────────────

@@ -43,6 +43,28 @@ namespace TFS_Mimics
     // ─────────────────────────────────────────────────────────────────────────────
     // Client → Host: "I now have this voice sound"
     // ─────────────────────────────────────────────────────────────────────────────
+    // Speaker -> everyone: what was going on when a clip was recorded (sent just before its chunks)
+    public class SoundContextPacket : NetworkPacket<SoundContextPacket>
+    {
+        public string SoundGuid { get; set; }
+        public int SenderActorNumber { get; set; }
+        public string Context { get; set; }
+
+        protected override void WriteData(SocketMessage socketMessage)
+        {
+            socketMessage.Write(SenderActorNumber);
+            socketMessage.Write(SoundGuid);
+            socketMessage.Write(Context ?? string.Empty);
+        }
+
+        protected override void ReadData(SocketMessage socketMessage)
+        {
+            SenderActorNumber = socketMessage.Read<int>();
+            SoundGuid = socketMessage.Read<string>();
+            Context = socketMessage.Read<string>();
+        }
+    }
+
     public class SoundReadyPacket : NetworkPacket<SoundReadyPacket>
     {
         public string SoundGuid { get; set; }
@@ -173,6 +195,32 @@ namespace TFS_Mimics
                 packet.SampleRate,
                 packet.TransmissionId,
                 sender);
+        }
+
+        // Contexts that arrived before their clip finished assembling.
+        private static readonly Dictionary<string, RecordingContext> PendingContexts = new Dictionary<string, RecordingContext>();
+
+        internal static void OnSoundContextPacketReceived(SoundContextPacket packet)
+        {
+            if (packet == null || string.IsNullOrEmpty(packet.SoundGuid)) return;
+            var ctx = RecordingContext.Parse(packet.Context);
+            if (ctx == null) return;
+
+            var entry = FindCachedAudio(packet.SoundGuid);
+            if (entry != null)
+            {
+                entry.Context = ctx;
+                return;
+            }
+            PendingContexts[packet.SoundGuid] = ctx;
+            if (PendingContexts.Count > 64) PendingContexts.Remove(PendingContexts.Keys.First());
+        }
+
+        private static RecordingContext TakePendingContext(string soundGuid)
+        {
+            if (string.IsNullOrEmpty(soundGuid) || !PendingContexts.TryGetValue(soundGuid, out var ctx)) return null;
+            PendingContexts.Remove(soundGuid);
+            return ctx;
         }
 
         internal static void OnSoundReadyPacketReceived(SoundReadyPacket packet)

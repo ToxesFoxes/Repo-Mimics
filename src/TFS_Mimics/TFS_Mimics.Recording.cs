@@ -229,6 +229,7 @@ namespace TFS_Mimics
                 var localPlayerId = GetPlayerPersistentId(localPlayer);
                 var localPlayerName = GetPlayerDisplayName(localPlayer);
                 Log.LogInfo($"Started recording player [{localPlayerName}]({localPlayerId}) {DebugContext()}");
+                BeginRecordingContext();
                 DLog($"Speech detected: begin capture voiceDataSamples={voiceData.Length} {DebugContext()}");
             }
 
@@ -282,29 +283,66 @@ namespace TFS_Mimics
             capturingSpeech = false;
             fileSaved = true;
 
-            var audioBytes = ConvertFloatArrayToByteArray(finalSamples);
-            var durationSec = sampleRate > 0 ? usedSamples / (float)sampleRate : 0f;
+            // Smaller clips: cut the silence around the phrase, then store at a lower rate. Playback low-passes at
+            // 4.5 kHz anyway, so 16 kHz (8 kHz bandwidth) sounds the same and is a third of the size.
+            var trimmed = TrimSilence(finalSamples, sampleRate);
+            var storeRate = GetStorageSampleRate();
+            var stored = AudioFilters.Resample(trimmed, sampleRate, storeRate);
+            var audioBytes = ConvertFloatArrayToByteArray(stored);
+            var context = FinishRecordingContext(trimmed, sampleRate);
+            var durationSec = sampleRate > 0 ? trimmed.Length / (float)sampleRate : 0f;
             var localPlayer = PhotonNetwork.LocalPlayer;
             var localPlayerId = GetPlayerPersistentId(localPlayer);
             var localPlayerName = GetPlayerDisplayName(localPlayer);
             Log.LogInfo($"Finished recording player [{localPlayerName}]({localPlayerId}) duration={durationSec:F2}s bytes={audioBytes.Length} {DebugContext()}");
-            DLog($"FinalizeCaptureAndSend: usedSamples={usedSamples} bytes={audioBytes.Length} {DebugContext()}");
+            DLog($"FinalizeCaptureAndSend: usedSamples={usedSamples} trimmed={trimmed.Length} storeRate={storeRate} bytes={audioBytes.Length} (raw would be {usedSamples * 2}) {DebugContext()}");
             // TryWriteDebugWav("rec", audioBytes, sampleRate);
             if (_isSendingAudio)
             {
                 if (_sendQueue.Count >= MaxSendQueueDepth)
                 {
                     var dropped = _sendQueue.Dequeue();
-                    Log.LogWarning($"SendQueue full (depth={MaxSendQueueDepth}): dropped oldest entry ({dropped.Length} bytes) {DebugContext()}");
+                    Log.LogWarning($"SendQueue full (depth={MaxSendQueueDepth}): dropped oldest entry ({dropped.audio.Length} bytes) {DebugContext()}");
                 }
-                _sendQueue.Enqueue(audioBytes);
+                _sendQueue.Enqueue((audioBytes, context, storeRate));
                 Log.LogInfo($"SendQueue: enqueued {audioBytes.Length} bytes (queued={_sendQueue.Count}) {DebugContext()}");
             }
             else
             {
-                StartCoroutine(SendAudioInChunks(audioBytes));
+                StartCoroutine(SendAudioInChunks(audioBytes, context, storeRate));
             }
             StartRecording();
+        }
+
+        private static int GetStorageSampleRate()
+        {
+            var rate = Plugin.configStorageSampleRate?.Value ?? 16000;
+            return Mathf.Clamp(rate, 8000, 48000);
+        }
+
+        // Keeps the phrase plus a short margin: 0.15 s before the first voiced frame, 0.25 s after the last.
+        private float[] TrimSilence(float[] samples, int rate)
+        {
+            var frame = Mathf.Max(1, rate / 50); // 20 ms
+            var threshold = Mathf.Max(GetVadThreshold() * 0.6f, vadNoiseFloor * 2f);
+            int first = -1, last = -1;
+            for (var start = 0; start + frame <= samples.Length; start += frame)
+            {
+                double sum = 0;
+                for (var i = start; i < start + frame; i++) sum += samples[i] * samples[i];
+                if (Math.Sqrt(sum / frame) <= threshold) continue;
+                if (first < 0) first = start;
+                last = start + frame;
+            }
+            if (first < 0) return samples;
+
+            var from = Mathf.Max(0, first - (int)(rate * 0.15f));
+            var to = Mathf.Min(samples.Length, last + (int)(rate * 0.25f));
+            if (to - from < rate * 0.3f || (from == 0 && to == samples.Length)) return samples;
+
+            var result = new float[to - from];
+            Array.Copy(samples, from, result, 0, result.Length);
+            return result;
         }
 
         // Voice activity detection using per-frame RMS energy.
@@ -388,7 +426,7 @@ namespace TFS_Mimics
         // Steam Networking chunk size — 200 KB keeps us well under the ~512 KB Steam message limit.
         private const int SteamChunkSize = 204800;
 
-        private IEnumerator SendAudioInChunks(byte[] audioData)
+        private IEnumerator SendAudioInChunks(byte[] audioData, string context, int audioSampleRate)
         {
             _isSendingAudio = true;
             var chunks = ChunkAudioData(audioData, SteamChunkSize);
@@ -400,6 +438,17 @@ namespace TFS_Mimics
             Log.LogInfo($"Start sending audio [{localPlayerName}]({localPlayerId}) tx={transmissionId} bytes={audioData.Length} chunks={chunks.Count} destination={destination} {DebugContext()}");
             DLog($"SendAudioInChunks begin: totalBytes={audioData.Length} chunks={chunks.Count} chunkSize={SteamChunkSize} {DebugContext()}");
 
+            // The context goes first: messages to a peer arrive in order, so it's there when the clip completes.
+            if (!string.IsNullOrEmpty(context))
+            {
+                RepoSteamNetwork.SendPacket(new SoundContextPacket
+                {
+                    SoundGuid = transmissionId,
+                    SenderActorNumber = localPlayer.ActorNumber,
+                    Context = context
+                }, destination);
+            }
+
             for (var i = 0; i < chunks.Count; i++)
             {
                 var packet = new MimicsAudioPacket
@@ -407,7 +456,7 @@ namespace TFS_Mimics
                     ChunkData = chunks[i],
                     ChunkIndex = i,
                     TotalChunks = chunks.Count,
-                    SampleRate = sampleRate,
+                    SampleRate = audioSampleRate,
                     TransmissionId = transmissionId,
                     SenderActorNumber = localPlayer.ActorNumber
                 };
@@ -426,12 +475,13 @@ namespace TFS_Mimics
             {
                 AudioData = audioData,
                 ApplyVoiceFilter = false,
-                SampleRate = sampleRate,
+                SampleRate = audioSampleRate,
                 SourceActor = localPlayer.ActorNumber,
                 SourcePlayerId = localPlayerId,
                 SourceName = localPlayerName,
                 ReceivedAt = Time.time,
-                SoundGuid = transmissionId
+                SoundGuid = transmissionId,
+                Context = RecordingContext.Parse(context)
             };
             AddToAudioCache(selfEntry);
             NotifyHostSoundReady(transmissionId);
@@ -441,8 +491,8 @@ namespace TFS_Mimics
             if (_sendQueue.Count > 0)
             {
                 var next = _sendQueue.Dequeue();
-                Log.LogInfo($"SendQueue: starting next transmission ({next.Length} bytes, remaining={_sendQueue.Count}) {DebugContext()}");
-                StartCoroutine(SendAudioInChunks(next));
+                Log.LogInfo($"SendQueue: starting next transmission ({next.audio.Length} bytes, remaining={_sendQueue.Count}) {DebugContext()}");
+                StartCoroutine(SendAudioInChunks(next.audio, next.context, next.rate));
             }
 
             yield break;

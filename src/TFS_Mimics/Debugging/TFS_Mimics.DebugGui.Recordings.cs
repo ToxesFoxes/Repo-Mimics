@@ -405,7 +405,23 @@ namespace TFS_Mimics
             }
 
             GUILayout.EndHorizontal();
+
+            // Recording context: one summary line, click to expand every captured value.
+            var ctx = row.Voice?.Context;
+            if (ctx == null) return;
+            var expanded = ReferenceEquals(_recExpandedKey, row.Key);
+            GUI.color = CTextDim;
+            if (GUILayout.Button($"   {(expanded ? "▾" : "▸")} {FitHudText(ctx.Summary(), 90)}", _gsSmall))
+                _recExpandedKey = expanded ? null : row.Key;
+            if (expanded)
+            {
+                foreach (var kv in ctx.Values.OrderBy(kv => kv.Key, System.StringComparer.Ordinal))
+                    GUILayout.Label($"      {kv.Key} = {FitHudText(kv.Value, 80)}", _gsSmall);
+            }
+            GUI.color = Color.white;
         }
+
+        private object _recExpandedKey;
 
         private void DrawWaveform(Rect r, float[] peaks, Color color, float progress)
         {

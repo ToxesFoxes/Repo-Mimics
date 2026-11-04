@@ -28,6 +28,8 @@ namespace TFS_Mimics
             public bool Pinned;         // protected from the per-player file limit
             public int PlayCount;
             public float[] Waveform;    // lazily built peak envelope for the recordings list
+            public RecordingContext Context; // what was going on when it was said (null for old clips)
+            public string LoadedGuid;        // original SoundGuid of a clip loaded from disk (links replies)
         }
 
         private sealed class ActivePlayback
@@ -103,7 +105,7 @@ namespace TFS_Mimics
         private bool capturingSpeech;
         private bool fileSaved;
         private bool _isSendingAudio;
-        private readonly Queue<byte[]> _sendQueue = new Queue<byte[]>();
+        private readonly Queue<(byte[] audio, string context, int rate)> _sendQueue = new Queue<(byte[] audio, string context, int rate)>();
         private float vadHoldUntil;
 
         private Dictionary<string, bool> filter;
@@ -144,6 +146,7 @@ namespace TFS_Mimics
             }
             cachedAudio.Add(entry);
             cachedAudioVersion++;
+            NoteSpeechTiming(entry);
             EnforceMemoryLimit(GetEntryPlayerKey(entry));
         }
 
@@ -162,12 +165,13 @@ namespace TFS_Mimics
         // Evicted clips stay on disk; their paths stay in loadedPersistedFiles so they aren't reloaded.
         private static void EnforceMemoryLimit(string playerKey)
         {
-            var limit = Plugin.configMaxClipsInMemory?.Value ?? 40;
+            var limit = Plugin.configMaxClipsInMemory?.Value ?? 120;
             var own = cachedAudio.Where(e => e != null && GetEntryPlayerKey(e) == playerKey).ToList();
             var excess = own.Count - limit;
             if (excess <= 0) return;
 
-            foreach (var old in own.Where(e => !e.Pinned).OrderBy(e => e.ReceivedAt).Take(excess).ToList())
+            // Wear: the most-played clips go first (they've been heard enough), then the oldest.
+            foreach (var old in own.Where(e => !e.Pinned).OrderByDescending(e => e.PlayCount).ThenBy(e => e.ReceivedAt).Take(excess).ToList())
             {
                 RemoveFromAudioCache(old);
             }
@@ -243,9 +247,11 @@ namespace TFS_Mimics
                 _fpmOpen = false;
                 _debugWindowFocused = _debugWindowOpen;
                 DestroyAllOverlays();
+                MimicMouths.Clear();
                 SetCursorForGui(false);
             }
 
+            RecordingContextTick();
             DirectorUpdate();
 
             if (!IsDebugGuiAllowedHere())

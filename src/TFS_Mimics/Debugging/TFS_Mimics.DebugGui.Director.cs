@@ -40,8 +40,37 @@ namespace TFS_Mimics
             if (GUILayout.Button("hurt", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.Hurt);
             if (GUILayout.Button("spotted", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.Spotted);
             if (GUILayout.Button("break", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.Break);
+            if (GUILayout.Button("grabbed", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.Special);
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(64f);
             if (GUILayout.Button("head", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.HeadTalk);
             if (GUILayout.Button("pickup", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.Pickup);
+            if (GUILayout.Button("sneak", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.SneakLure);
+            if (GUILayout.Button("look under", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.LookUnderLure);
+            if (GUILayout.Button("voice line", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.VoiceLine);
+            GUI.enabled = true;
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(64f);
+            GUI.enabled = inLevel;
+            if (GUILayout.Button("talk answer", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.TalkAnswer);
+            if (GUILayout.Button("enemy fight", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.EnemyFight);
+            if (GUILayout.Button("enemy hits loot", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.EnemyHitItem);
+            if (GUILayout.Button("mob dialog", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulateMobDialog();
+            GUI.enabled = true;
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(64f);
+            GUI.enabled = inLevel;
+            if (GUILayout.Button("flee", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.PlayerFlee);
+            if (GUILayout.Button("approach", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.PlayerApproach);
+            if (GUILayout.Button("hide", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.PlayerHide);
+            if (GUILayout.Button("self hurt", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.EnemySelfHurt);
+            if (GUILayout.Button("player hits", _gsBtn, GUILayout.Height(22f), GUILayout.ExpandWidth(false))) DirectorSimulate(DirectorEventKind.EnemyHurtByPlayer);
             GUI.enabled = true;
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
@@ -50,7 +79,7 @@ namespace TFS_Mimics
             GUI.color = Color.white;
             GUILayout.Space(3f);
 
-            _scrollDirector = GUILayout.BeginScrollView(_scrollDirector, GUILayout.Height(Mathf.Max(80f, scrollH - 62f)));
+            _scrollDirector = GUILayout.BeginScrollView(_scrollDirector, GUILayout.Height(Mathf.Max(80f, scrollH - 140f)));
 
             // ── Pending events ────────────────────────────────────────────────
             if (_directorPending.Count > 0)

@@ -251,8 +251,9 @@ namespace TFS_Mimics
             source.minDistance = 1f;
             source.maxDistance = 20f;
             source.rolloffMode = AudioRolloffMode.Linear;
-            source.outputAudioMixerGroup = null;
+            RouteLikePlayerVoice(source);
             source.Play();
+            MimicMouths.Attach(selected.Enemy, source);
 
             var playbackEndsAt = Time.time + entry.Clip.length + 0.1f;
             var targetKey = GetPlaybackTargetKey(selected.Enemy, selected.Target);

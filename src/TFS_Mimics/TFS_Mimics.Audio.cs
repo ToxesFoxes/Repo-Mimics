@@ -89,9 +89,14 @@ namespace TFS_Mimics
                 samples[i] = BitConverter.ToInt16(bytes, i * 2) / 32768f;
             }
 
-            samples = AudioFilters.ApplyLowPassFilter(samples, 4500f, sampleRate);
-            samples = AudioFilters.Apply(samples, voiceFilterMode, sampleRate);
-            AudioFilters.NormalizeSamples(samples);
+            samples = AudioFilters.ApplyLowPassFilter(samples, 4500f, senderSampleRate);
+            samples = AudioFilters.Apply(samples, voiceFilterMode, senderSampleRate);
+            // Played like a real player's voice, the clip is brought to a speech level like the game's voice chat
+            // (our capture is before the game's gain); peak normalization made it ~10 dB louder than real voices.
+            if (Plugin.configGameVoiceRouting != null && !Plugin.configGameVoiceRouting.Value)
+                AudioFilters.NormalizeSamples(samples);
+            else
+                AudioFilters.NormalizeSpeechLevel(samples, (Plugin.configPlayerVoiceLevel?.Value ?? 15) / 100f * 0.25f);
 
             var output = new float[samples.Length + silencePadding * 2];
             for (var i = 0; i < samples.Length; i++)

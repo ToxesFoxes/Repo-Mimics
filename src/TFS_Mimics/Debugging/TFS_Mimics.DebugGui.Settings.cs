@@ -15,6 +15,7 @@ namespace TFS_Mimics
             if (_settingMinDelayBuf == null) _settingMinDelayBuf = (Plugin.configMinDelay?.Value ?? 5).ToString();
             if (_settingMaxDelayBuf == null) _settingMaxDelayBuf = (Plugin.configMaxDelay?.Value ?? 15).ToString();
             if (_settingMaxFilesBuf == null) _settingMaxFilesBuf = (Plugin.configPersistMaxFilesPerPlayer?.Value ?? 100).ToString();
+            if (_settingVoiceLevelBuf == null) _settingVoiceLevelBuf = (Plugin.configPlayerVoiceLevel?.Value ?? 15).ToString();
             if (_settingSamplingRateBuf == null) _settingSamplingRateBuf = (Plugin.configSamplingRate?.Value ?? 48000).ToString();
             if (_settingNormalizeBuf == null) _settingNormalizeBuf = (Plugin.configNormalizeTarget?.Value ?? 85).ToString();
             if (_settingVadSensitivityBuf == null) _settingVadSensitivityBuf = (Plugin.configVadSensitivity?.Value ?? 85).ToString();
@@ -57,6 +58,19 @@ namespace TFS_Mimics
             DrawSettingToggle("Event: Valuable Broken", Plugin.configEventBreak);
             DrawSettingToggle("Event: Head Grabber Talks", Plugin.configEventHeadTalk);
             DrawSettingToggle("Event: Valuable Picked Up", Plugin.configEventPickup);
+            DrawSettingToggle("Event: Sneaking Enemy Lure", Plugin.configEventSneakLure);
+            DrawSettingToggle("Event: Look-Under Lure", Plugin.configEventLookUnderLure);
+            DrawSettingToggle("Event: Enemy Voice Lines", Plugin.configEventVoiceLines);
+            DrawSettingToggle("Event: Enemy Special Moments", Plugin.configEventSpecials);
+            DrawSettingToggle("Event: Hunter Hears Mimics", Plugin.configEventHunterHears);
+            DrawSettingToggle("Event: Enemy Answers Talk", Plugin.configEventTalkAnswer);
+            DrawSettingToggle("Event: Enemy Hits Enemy", Plugin.configEventEnemyFight);
+            DrawSettingToggle("Event: Enemy Hits Valuable", Plugin.configEventEnemyHitItem);
+            DrawSettingToggle("Event: Enemies Talk To Each Other", Plugin.configEventMobDialog);
+            DrawSettingToggle("Persona Rhythm", Plugin.configPersonaRhythm);
+            DrawSettingToggle("Event: Player Flees/Approaches/Hides", Plugin.configEventPlayerMoves);
+            DrawSettingToggle("Event: Enemy Hurts Itself", Plugin.configEventEnemySelfHurt);
+            DrawSettingToggle("Event: Player Hurts Enemy", Plugin.configEventEnemyHurtByPlayer);
 
             GUILayout.Space(4f);
 
@@ -75,6 +89,9 @@ namespace TFS_Mimics
 
             DrawSettingSliderInt("Sampling Rate", ref _settingSamplingRateBuf,
                 Plugin.configSamplingRate, 16000, 48000, "Hz");
+            DrawSettingToggle("Sound Like Player Voices", Plugin.configGameVoiceRouting);
+            DrawSettingSliderInt("Player Voice Level", ref _settingVoiceLevelBuf, Plugin.configPlayerVoiceLevel, 5, 100, "");
+            DrawStorageRateChooser();
 
             GUILayout.Space(4f);
 
@@ -96,6 +113,26 @@ namespace TFS_Mimics
             }
 
             GUILayout.EndScrollView();
+        }
+
+        private static readonly int[] StorageRates = { 16000, 24000, 32000, 48000 };
+
+        private void DrawStorageRateChooser()
+        {
+            if (Plugin.configStorageSampleRate == null) return;
+            GUILayout.BeginHorizontal(_gsPanelBox);
+            GUI.color = CText;
+            GUILayout.Label("Storage Sample Rate", _gsLabel, GUILayout.Width(200f));
+            GUI.color = Color.white;
+            GUILayout.FlexibleSpace();
+            foreach (var rate in StorageRates)
+            {
+                var on = Plugin.configStorageSampleRate.Value == rate;
+                if (GUILayout.Button($"{rate / 1000}k", on ? _gsBtnPrimary : _gsBtn, GUILayout.Width(40f), GUILayout.Height(20f)))
+                    Plugin.configStorageSampleRate.Value = rate;
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Space(2f);
         }
 
         private void DrawSettingsSection(string label)

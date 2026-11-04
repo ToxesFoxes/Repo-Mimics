@@ -90,7 +90,7 @@ namespace TFS_Mimics
                 using (var fs = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
                 using (var writer = new BinaryWriter(fs))
                 {
-                    writer.Write("MIMC2");
+                    writer.Write("MIMC3");
                     writer.Write(actorId);
                     writer.Write(playerId);
                     writer.Write(entry.SampleRate);
@@ -98,6 +98,8 @@ namespace TFS_Mimics
                     writer.Write(entry.SourceName ?? string.Empty);
                     writer.Write(entry.AudioData.Length);
                     writer.Write(entry.AudioData);
+                    writer.Write(entry.SoundGuid ?? string.Empty);
+                    writer.Write(entry.Context != null ? entry.Context.Serialize() : string.Empty);
                 }
 
                 entry.FilePath = path;
@@ -123,14 +125,15 @@ namespace TFS_Mimics
                 using (var reader = new BinaryReader(fs))
                 {
                     var signature = reader.ReadString();
-                    if (!string.Equals(signature, "MIMC1", StringComparison.Ordinal) && !string.Equals(signature, "MIMC2", StringComparison.Ordinal))
+                    if (!string.Equals(signature, "MIMC1", StringComparison.Ordinal) && !string.Equals(signature, "MIMC2", StringComparison.Ordinal)
+                        && !string.Equals(signature, "MIMC3", StringComparison.Ordinal))
                     {
                         return false;
                     }
 
                     var actorId = reader.ReadInt32();
                     var playerId = string.Empty;
-                    if (string.Equals(signature, "MIMC2", StringComparison.Ordinal))
+                    if (!string.Equals(signature, "MIMC1", StringComparison.Ordinal))
                     {
                         playerId = reader.ReadString();
                     }
@@ -148,6 +151,15 @@ namespace TFS_Mimics
                     if (data.Length != len)
                     {
                         return false;
+                    }
+
+                    string soundGuid = null;
+                    RecordingContext context = null;
+                    if (string.Equals(signature, "MIMC3", StringComparison.Ordinal))
+                    {
+                        soundGuid = reader.ReadString();
+                        context = RecordingContext.Parse(reader.ReadString());
+                        if (string.IsNullOrEmpty(soundGuid)) soundGuid = null;
                     }
 
                     if (actorId < 0 && TryParsePlayerIdFromAudioFileName(path, out var filePlayerId))
@@ -170,7 +182,9 @@ namespace TFS_Mimics
                         SourceName = sourceName,
                         ReceivedAt = Time.time,
                         FilePath = path,
-                        Pinned = IsPinnedFile(path)
+                        Pinned = IsPinnedFile(path),
+                        LoadedGuid = soundGuid,
+                        Context = context
                     };
 
                     return true;

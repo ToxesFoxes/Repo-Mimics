@@ -93,7 +93,8 @@ namespace TFS_Mimics
                 SourcePlayerId = transmission.SenderPlayerId,
                 SourceName = transmission.SenderName,
                 ReceivedAt = Time.time,
-                SoundGuid = tx
+                SoundGuid = tx,
+                Context = TakePendingContext(tx)
             };
             AddToAudioCache(entry);
 
@@ -250,9 +251,10 @@ namespace TFS_Mimics
             sourceComponent.rolloffMode = AudioRolloffMode.Linear;
 
             // Null mixer group = Unity's default Master output, always audible.
-            sourceComponent.outputAudioMixerGroup = null;
+            RouteLikePlayerVoice(sourceComponent);
 
             sourceComponent.Play();
+            MimicMouths.Attach(selected.Enemy, sourceComponent);
             DLog($"AudioSource.Play() called: isActiveAndEnabled={sourceComponent.isActiveAndEnabled} mute={sourceComponent.mute} pitch={sourceComponent.pitch} volume={sourceComponent.volume:F2} spatialBlend={sourceComponent.spatialBlend} pos={FormatHudVector(sourceComponent.transform.position)} {DebugContext()}");
             var playbackEndsAt = Time.time + clip.length + 0.1f;
             var targetKey = GetPlaybackTargetKey(selected.Enemy, selected.Target);
@@ -819,7 +821,23 @@ namespace TFS_Mimics
             return false;
         }
 
+        // Polled by several director loops (talk, enemy states, playback), so the scene scan is shared for a short while.
+        // Callers only read the list; a rebuild always creates a new one.
+        private List<GameObject> _enemiesListCache;
+        private float _enemiesListCachedAt = -1f;
+        private const float EnemiesListCacheSeconds = 0.25f;
+
         private List<GameObject> GetEnemiesList()
+        {
+            if (_enemiesListCache != null && Time.time - _enemiesListCachedAt < EnemiesListCacheSeconds)
+                return _enemiesListCache;
+
+            _enemiesListCache = BuildEnemiesList();
+            _enemiesListCachedAt = Time.time;
+            return _enemiesListCache;
+        }
+
+        private List<GameObject> BuildEnemiesList()
         {
             var list = new List<GameObject>();
             var known = patches.EnemyDirectorStartPatch.KnownEnemyNames;
@@ -867,7 +885,8 @@ namespace TFS_Mimics
                 list.Add(go);
             }
 
-            DLog($"GetEnemiesList: found {list.Count} enemies in scene {DebugContext()}");
+            if (Plugin.configDebugVerbose != null && Plugin.configDebugVerbose.Value)
+                DLog($"GetEnemiesList: found {list.Count} enemies in scene {DebugContext()}");
 
             return list;
         }
@@ -887,6 +906,7 @@ namespace TFS_Mimics
 
             var guid = packet.SoundGuid;
             if (string.IsNullOrEmpty(guid) || packet.EnemyViewIds == null || packet.EnemyViewIds.Length == 0) return;
+            DirectorAlertHunters(packet.EnemyViewIds);
 
             var voiceEntry = FindCachedAudio(guid);
             if (voiceEntry != null)
@@ -974,8 +994,11 @@ namespace TFS_Mimics
             sourceComponent.minDistance = 1f;
             sourceComponent.maxDistance = 20f;
             sourceComponent.rolloffMode = AudioRolloffMode.Linear;
-            sourceComponent.outputAudioMixerGroup = null;
+            RouteLikePlayerVoice(sourceComponent);
             sourceComponent.Play();
+            MimicMouths.Attach(enemyGo, sourceComponent);
+            if (Vector3.Distance(enemyGo.transform.position, transform.position) <= 20f)
+                NoteLocalEvent($"mimic:{NormalizeEnemyName(enemyGo.name)}:{sourceLabel}", 5f);
 
             var targetKey = GetPlaybackTargetKey(enemyGo, null);
             TrackPlaybackStart(targetKey, clip.length, NormalizeEnemyName(enemyGo.name), sourceLabel);

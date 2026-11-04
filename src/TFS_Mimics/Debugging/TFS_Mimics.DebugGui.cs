@@ -53,6 +53,7 @@ namespace TFS_Mimics
         private string _settingMaxDelayBuf;
         private string _settingMaxFilesBuf;
         private string _settingSamplingRateBuf;
+        private string _settingVoiceLevelBuf;
         private string _settingNormalizeBuf;
         private string _settingVadSensitivityBuf;
         private bool _settingsDirty;
@@ -238,6 +239,7 @@ namespace TFS_Mimics
 
             if (!_debugWindowOpen)
             {
+                HideWorldGizmos();
                 return;
             }
 
@@ -262,6 +264,11 @@ namespace TFS_Mimics
             if (inLevel && _showGizmos)
             {
                 RefreshEnemyOverlays();
+                UpdateWorldGizmos();
+            }
+            else
+            {
+                HideWorldGizmos();
             }
         }
 

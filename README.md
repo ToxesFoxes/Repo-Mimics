@@ -34,6 +34,11 @@ This mod is incompatible with mods:
 - Voice can be played back with a random pitch or alien filter — the host decides which, so all players hear the same effect
 - **Smart director** — the host picks the voice, the enemy and the listeners by context instead of at random (see below)
 - **Event reactions** — mimics react to deaths, damage, enemies spotting players, broken or grabbed valuables, and the Head Grabber carrying a player's head
+- **Enemy-aware mimics** — sneaking and searching enemies lure with a teammate's voice, talkative enemies say stolen lines instead of their own, and signature moments (grabs, the Bomb Thrower's thrown head, Spinny's roulette…) get a voice
+- **Talk back** — speak to an enemy while looking at it and it answers, up to a short back-and-forth
+- **Enemies talk to each other** — two enemies replay a real conversation between players, line by line
+- **Recording context** — every phrase remembers what was happening when it was said, and the director picks phrases that fit the moment
+- **Sounds like a real voice** — mouths move with the voice, and mimics go through the game's voice mix: room reverb and muffled behind walls
 - **Microphone setup wizard** on the main menu tunes how loud you need to speak to be recorded
 - **Debug menu** (`F8`) with a live mic meter, recordings manager, director decisions and event feed
 - Custom audio support — drop your own `.mp3` or `.wav` files into the `custom-audio` folder to add more sounds to the mimic pool
@@ -48,8 +53,16 @@ The host scores every *voice × enemy × listener* combination and plays the mos
 - Voices of **far away** or **dead** players are preferred
 - Enemies **hidden behind walls** or out of view are preferred over ones in plain sight
 - **Lonely** listeners are targeted more often
-- Recently and frequently played clips are used less
+- Recently and frequently played clips are used less; a fresh phrase is never played back in its first 10 s, and the same clip never twice within 30 s
 - Your own voice is never played to you if `Hear Yourself?` is off
+- A dead player's voice is aimed at those who **didn't see them die**
+- An enemy tends to **keep the voice** it spoke with last
+- The phrase has to **fit the scene**: screams for pain, calm lines and greetings for lures, whispers for a hiding player, phrases said to someone for an enemy that is being watched
+- **Persona rhythm** — an enemy speaking as someone may continue after that player's usual pause between phrases
+
+### Recording context
+
+When you speak, Mimics remembers the moment together with the phrase: how loud it was (whisper / normal / loud / scream), your health and pose, the room, what you held, who you were looking at (an enemy or a teammate), teammates and enemies around you, and what had just happened (you got hurt, saw a teammate hurt or die, an enemy noticed you, a teammate showed up, a mimic spoke nearby…). If another player had just stopped talking, the phrase is marked as a reply to them. The context travels with the clip and is saved with it. You can see it in the **Recordings** tab of the debug menu.
 
 ### Event reactions
 
@@ -61,6 +74,15 @@ The host scores every *voice × enemy × listener* combination and plays the mos
 | Valuable broken           | An enemy nearby reacts with the voice of whoever held it                                                         |
 | Valuable picked up        | Sometimes a hidden enemy nearby talks to the player who grabbed loot worth $200+                                 |
 | Head Grabber carries head | The carried head calls out with its owner's voice and screams when the grabber attacks — the dead owner watches through it |
+| Enemy sneaks / searches   | Enemies creeping up unseen call from behind; enemies looking under furniture try to talk a hiding player out      |
+| Enemy voice lines         | Oogly, Birthday Boy, Tricycle and Bang sometimes say a teammate's words instead of their own line; Duck and Bomb Thrower answer theirs |
+| Special moments           | Grabbed players (Spewer, Hidden, Snatcher, Tick) call for help in their own voice; Heart Hugger, Birthday Boy, Thin Man, Valuable Thrower and Ceiling Eye lure; the Bomb Thrower's thrown head talks; Spinny's roulette gets a reaction |
+| Hunter hears mimics       | The blind Hunter goes to check — and may shoot at — a mimic voice near it                                         |
+| Talking to an enemy       | Speak while looking at an enemy and it answers with a teammate's voice or an echo of yours; answer it back for up to 3 exchanges |
+| Enemies talk to each other| Two calm enemies near each other replay a real exchange between players, so you overhear them                     |
+| Enemy hits enemy / valuable | The one that got hit cries out; an enemy smashing loot speaks with the voice of whoever carried it              |
+| Enemy hurt                | Hurt by a fall or a trap, it complains; hurt by a player, it screams in the attacker's voice or a teammate pleads to stop |
+| Player flees / approaches / hides | Running from an enemy, someone calls after you; walking up to one, it greets you; hiding from one, it whispers that it's safe |
 
 If no enemy is close enough when an event happens, it waits a few seconds for one to come near. Every event can be turned off in the **Host Only** settings, and `Smart Director = false` switches back to the classic random mode.
 
@@ -81,7 +103,8 @@ Press `F8` in a level, the shop or the truck lobby. `Shift+F8` gives the mouse b
 
 - **Status strip** — live mic level with noise floor and detection threshold markers, current playbacks
 - **Recordings** — every cached voice and custom clip with waveform, play count and age: listen locally, play on the nearest enemy, pin (kept from auto-cleanup) or delete
-- **Director** — pending events, recent decisions with a per-listener score breakdown, the event feed, and buttons that simulate events for solo testing
+- **Director** — pending events, recent decisions with a per-listener score breakdown (including why the phrase fit the moment), the event feed, and buttons that simulate every event for solo testing
+- **Gizmos** (Overlays tab) — enemy pathfinding, who a player is talking to, enemy hits, player-vs-enemy moves and enemy dialogs, drawn in the world
 - **Mobs / Players / Network / Overlays / Settings** — enemy list, player state and per-player mimic volume, transmissions and sound readiness, in-world overlays, all settings
 
 ## 📦 Installation via r2modman
@@ -115,7 +138,7 @@ Settings are stored in the BepInEx config file:
 | `Hear Yourself?`               | `true`  | `true` / `false`  | If `false`, your own voice is never played back to you; other players still hear it. |
 | `Voice Detection Sensitivity`  | `85`    | `0-100`           | How easily your voice starts a recording. Higher catches quieter speech but also more background noise. Set by the setup wizard. |
 | `Show Setup Wizard`            | `false` | `true` / `false`  | Opens the microphone setup wizard on the main menu. Turns itself off after Save / Skip. |
-| `Max Clips In Memory Per Player` | `40`  | `5-500`           | Recordings per player kept loaded during a session. Oldest unpinned ones are dropped from memory, not from disk. |
+| `Max Clips In Memory Per Player` | `120` | `5-500`           | Recordings per player kept loaded during a session. The most-played unpinned ones are dropped first (from memory, not from disk). |
 | `Persist Audio Cache`          | `false` | `true` / `false`  | Enables saving received mimic clips to disk between sessions.                     |
 | `Persist Max Files Per Player` | `100`   | `1-5000`          | Max saved recordings per player folder. Pinned recordings don't count.            |
 | `Normalize Target`             | `85`    | `0-100`           | Peak normalization target for voice and custom audio (`0` = off, `100` = 0 dBFS). |
@@ -137,6 +160,19 @@ These settings only take effect on the player who is host. Clients can leave the
 | `Event: Valuable Broken`         | `true`  | `true` / `false`  | An enemy reacts with the voice of whoever held the broken valuable.                              |
 | `Event: Head Grabber Talks`      | `true`  | `true` / `false`  | A head carried by the Head Grabber talks with its owner's voice.                                 |
 | `Event: Valuable Picked Up`      | `true`  | `true` / `false`  | Sometimes a hidden enemy talks to the player who grabbed a valuable worth $200+.                 |
+| `Event: Sneaking Enemy Lure`     | `true`  | `true` / `false`  | An enemy sneaking up unseen calls out in a teammate's voice from behind.                         |
+| `Event: Look-Under Lure`         | `true`  | `true` / `false`  | An enemy searching under furniture tries to talk a hiding player out.                            |
+| `Event: Enemy Voice Lines`       | `true`  | `true` / `false`  | Talkative enemies say a teammate's words instead of their own lines.                             |
+| `Event: Enemy Special Moments`   | `true`  | `true` / `false`  | Grabs, lures, the thrown head and the roulette get a voice.                                      |
+| `Event: Hunter Hears Mimics`     | `true`  | `true` / `false`  | The Hunter goes to check mimic voices within 20 m.                                               |
+| `Event: Enemy Answers Talk`      | `true`  | `true` / `false`  | Enemies answer players who talk to them.                                                         |
+| `Event: Enemies Talk To Each Other` | `true` | `true` / `false` | Two enemies replay a real exchange between players.                                             |
+| `Event: Enemy Hits Enemy`        | `true`  | `true` / `false`  | An enemy hit by another one cries out.                                                           |
+| `Event: Enemy Hits Valuable`     | `true`  | `true` / `false`  | An enemy smashing loot speaks with its last carrier's voice.                                     |
+| `Event: Enemy Hurts Itself`      | `true`  | `true` / `false`  | An enemy hurt by a fall, a trap or a crash complains.                                            |
+| `Event: Player Hurts Enemy`      | `true`  | `true` / `false`  | An enemy hit by a player screams or a teammate pleads to stop.                                   |
+| `Event: Player Flees/Approaches/Hides` | `true` | `true` / `false` | Reactions to what a player does about an enemy.                                              |
+| `Persona Rhythm`                 | `true`  | `true` / `false`  | An enemy speaking as someone may continue after that player's usual pause.                       |
 
 ### Filter
 
@@ -145,6 +181,9 @@ These settings only take effect on the player who is host. Clients can leave the
 ### Experimental
 
 - `Sampling Rate` (default: `48000`, range: `16000-48000`) — microphone and processing sample rate.
+- `Storage Sample Rate` (default: `16000`, values: `16000`, `24000`, `32000`, `48000`) — rate recordings are stored and sent at. Playback filters out everything above 4.5 kHz anyway, so 16 kHz sounds the same at a third of the size.
+- `Sound Like Player Voices` (default: `true`) — mimic voices go through the game's player-voice mix (room reverb, voice volume) and are muffled behind walls like real voices.
+- `Player Voice Level` (default: `15`, range: `5-100`) — speech loudness of mimic voices in that mode. Raise it if mimics sound quieter than real teammates.
 
 ### Debug
 
@@ -170,14 +209,17 @@ If persistence is enabled, recorded clips are saved here:
     <player_id>/audio_<player_id>_<guid>.bin
 ```
 
+Clips saved by 2.0 also keep their recording context; older files still load.
+
 ## 🧭 Roadmap
 
-Done: context-aware playback tied to gameplay events (enemy sees player, player damage and death, broken items) — see **Smart Director**.
+Done in 2.0: enemy-aware mimics, talking back, enemies talking to each other, recording context, voices that sound like players'.
 
 Ideas for later:
 
+- Opus compression for recordings (much smaller clips)
 - Sending a few recent clips to players who join mid-session
-- More enemy-specific behaviours, like the Head Grabber talking head
+- Mimic voices distorted like a walkie-talkie when played through one
 
 ## 📝 Requirements
 
@@ -227,6 +269,7 @@ This mod is a full rework focused on compatibility with newer R.E.P.O versions a
 - **Host-authority sound sync** — greedy set-cover algorithm selects the minimum number of enemies needed to cover all nearby players. Host decides the voice filter mode (none / pitch down ×0.5 / pitch up ×1.2 / alien) and broadcasts a `SyncPlayCommandPacket` so every client plays the exact same clip with the exact same effect simultaneously.
 - **Custom audio folder** — add your own `.mp3` or `.wav` files without writing any code; mod authors can also register clips at runtime via `MimicsAPI`.
 - **Smart director and event reactions** — context-aware selection of voice, enemy and listeners, plus reactions to deaths, damage, spotted players, valuables and the Head Grabber.
+- **Enemy-aware behaviour and recording context** — per-enemy lures, voice lines, lip-sync and special moments; phrases carry the context they were said in, enemies answer players and replay real conversations to each other.
 
 ## 🛠️ Build from Source
 
